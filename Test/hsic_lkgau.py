@@ -115,7 +115,7 @@ class IndpTest_LKGaussian(IndpTest):
     
     def search_width(self, X, Y, wx_init, wy_init, wx_max, wy_max, lr = 0.05, delta_estimate_grad=1e-3, \
                      iter_steps = 100, limit_max = True, debug = -1):
-    
+        # print("wx_init, wy_init", wx_init, wy_init) 
         wx_log_init = torch.log(wx_init)
         wy_log_init = torch.log(wy_init)
 
@@ -229,8 +229,8 @@ class IndpTest_LKGaussian(IndpTest):
 
         mHSIC = (1 + muX * muY - muX - muY) / n
 
-        al = (mHSIC**2 / varHSIC).detach().numpy()
-        bet = (varHSIC*n / mHSIC).detach().numpy()
+        al = (mHSIC**2 / varHSIC).detach().cpu().numpy()
+        bet = (varHSIC*n / mHSIC).detach().cpu().numpy()
 
         thresh = gamma.ppf(1-self.alpha, al, scale=bet)
 
@@ -326,7 +326,7 @@ class IndpTest_LKGaussian(IndpTest):
                 testStat, sigma_estimate_reg = self.J_maxpower_term(K, L, Kc, Lc, lamb_reg = 1e-10)
 
                 width_pair.append((wx,wy))
-                J_pair.append((testStat - thresh)/sigma_estimate_reg)
+                J_pair.append((testStat.item() - thresh.item())/sigma_estimate_reg.item())
 
         J_array = np.array(J_pair)
         indm = np.argmax(J_array)

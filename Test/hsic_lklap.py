@@ -231,8 +231,8 @@ class IndpTest_LKLaplace(IndpTest):
 
         mHSIC = (1 + muX * muY - muX - muY) / n
 
-        al = (mHSIC**2 / varHSIC).detach().numpy()
-        bet = (varHSIC*n / mHSIC).detach().numpy()
+        al = (mHSIC**2 / varHSIC).detach().cpu().numpy()
+        bet = (varHSIC*n / mHSIC).detach().cpu().numpy()
 
         thresh = gamma.ppf(1-self.alpha, al, scale=bet)
 

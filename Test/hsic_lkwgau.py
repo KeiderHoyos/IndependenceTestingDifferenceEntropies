@@ -89,18 +89,18 @@ class IndpTest_LKWeightGaussian(IndpTest):
         
         if self.null_gamma == True:
             if self.device.type == "cuda":
-                K, L = self.cal_weight_kernels(Xte, Yte, wx, wy, weight_x.cpu(), weight_y.cpu())
-            else:
                 K, L = self.cal_weight_kernels(Xte, Yte, wx, wy, weight_x, weight_y)
+            else:
+                K, L = self.cal_weight_kernels(Xte, Yte, wx, wy, weight_x.cpu(), weight_y.cpu())
             Kc = K - torch.mean(K,0)
             Lc = L - torch.mean(L,1)
             testStat,_ = self.J_maxpower_term(K, L, Kc, Lc)
             thresh,_,_ = self.cal_thresh(K, L, Kc, Lc)
         else:
             if self.device.type == "cuda":
-                K, L = self.cal_weight_kernels(Xte, Yte, wx, wy, weight_x.cpu(), weight_y.cpu())
-            else:
                 K, L = self.cal_weight_kernels(Xte, Yte, wx, wy, weight_x, weight_y)
+            else:
+                K, L = self.cal_weight_kernels(Xte, Yte, wx, wy, weight_x.cpu(), weight_y.cpu())
             Kc = K - torch.mean(K,0)
             Lc = L - torch.mean(L,1)
             testStat,_ = self.J_maxpower_term(K, L, Kc, Lc)
@@ -237,8 +237,8 @@ class IndpTest_LKWeightGaussian(IndpTest):
 
         mHSIC = (1 + muX * muY - muX - muY) / n
 
-        al = (mHSIC**2 / varHSIC).detach().numpy()
-        bet = (varHSIC*n / mHSIC).detach().numpy()
+        al = (mHSIC**2 / varHSIC).detach().cpu().numpy()
+        bet = (varHSIC*n / mHSIC).detach().cpu().numpy()
 
         thresh = gamma.ppf(1-self.alpha, al, scale=bet)
 
@@ -338,9 +338,9 @@ class IndpTest_LKWeightGaussian(IndpTest):
             p = np.random.permutation(len(X))
             Xp = X[p]
             if self.device.type == "cuda":
-                K, L = self.cal_weight_kernels(Xp, Y, wx, wy, weight_x.cpu(), weight_y.cpu())
-            else:
                 K, L = self.cal_weight_kernels(Xp, Y, wx, wy, weight_x, weight_y)
+            else:
+                K, L = self.cal_weight_kernels(Xp, Y, wx, wy, weight_x.cpu(), weight_y.cpu())
             Kc = K - torch.mean(K,0)
             Lc = L - torch.mean(L,1)
             s_p = self.compute_stat(K, L, Kc, Lc)
@@ -390,7 +390,7 @@ class IndpTest_LKWeightGaussian(IndpTest):
                 testStat, sigma_estimate_reg = self.J_maxpower_term(K, L, Kc, Lc, lamb_reg = 1e-10)
 
                 width_pair.append((wx,wy))
-                J_pair.append((testStat - thresh)/sigma_estimate_reg)
+                J_pair.append(((testStat - thresh)/sigma_estimate_reg).item())
 
         J_array = np.array(J_pair)
         indm = np.argmax(J_array)
