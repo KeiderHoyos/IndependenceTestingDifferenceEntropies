@@ -35,13 +35,24 @@ parser.add_argument('-parallel', '--parallel', required = False, default = False
 args = parser.parse_args()
 
 
-def sinedependence(n,d,seed = 0):
+def Sinusoid(x, y, w):
+    return 1 + np.sin(w*x)*np.sin(w*y)
+
+def Sinusoid_Generator(n,w, seed = 0):
     np.random.seed(seed)
-    mean = np.zeros(d)
-    cov = np.eye(d)
-    X = np.random.multivariate_normal(mean, cov, n)
-    Z = np.random.randn(n)
-    Y = 20*np.sin(4*np.pi*(X[:,0]**2 + X[:,1]**2))+Z 
+    i = 0
+    output = np.zeros([n,2])
+    while i < n:
+        U = np.random.rand(1)
+        V = np.random.rand(2)
+        x0 = -np.pi + V[0]*2*np.pi
+        x1 = -np.pi + V[1]*2*np.pi
+        if U < 1/2 * Sinusoid(x0,x1,w):
+            output[i, 0] = x0
+            output[i, 1] = x1
+            i = i + 1
+    X = output[:,0:1]
+    Y = output[:,1:]
     return X,Y
 
 def run():
@@ -54,9 +65,9 @@ def run():
         test_num = repetitions
         seed = 0 
     device = torch.device('cuda')
-    d = 3
+    w = 3
 
-    sample_sizes = (300, 600,900,1200)
+    sample_sizes = (300, 400,500,600)
     n_samples = len(sample_sizes)
     n_tests = 9
     test_power = np.zeros([n_tests,n_samples, test_num])
@@ -65,7 +76,7 @@ def run():
     for i, n in enumerate(sample_sizes):
         for j in range(test_num):
             print('sample size:', n, 'repetition: ', j)
-            X, Y = sinedependence(n, d, seed)
+            X, Y = Sinusoid_Generator(n, w, seed)
             Y = Y.reshape(-1,1)
             X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
 

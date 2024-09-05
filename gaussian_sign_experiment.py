@@ -35,13 +35,14 @@ parser.add_argument('-parallel', '--parallel', required = False, default = False
 args = parser.parse_args()
 
 
-def sinedependence(n,d,seed = 0):
+def GSign(n,d, seed):
     np.random.seed(seed)
     mean = np.zeros(d)
     cov = np.eye(d)
     X = np.random.multivariate_normal(mean, cov, n)
+    sign_X = np.sign(X)
     Z = np.random.randn(n)
-    Y = 20*np.sin(4*np.pi*(X[:,0]**2 + X[:,1]**2))+Z 
+    Y = np.abs(Z)*np.prod(sign_X,1)
     return X,Y
 
 def run():
@@ -54,9 +55,9 @@ def run():
         test_num = repetitions
         seed = 0 
     device = torch.device('cuda')
-    d = 3
+    d = 4
 
-    sample_sizes = (300, 600,900,1200)
+    sample_sizes = (400, 500,600,700)
     n_samples = len(sample_sizes)
     n_tests = 9
     test_power = np.zeros([n_tests,n_samples, test_num])
@@ -65,7 +66,7 @@ def run():
     for i, n in enumerate(sample_sizes):
         for j in range(test_num):
             print('sample size:', n, 'repetition: ', j)
-            X, Y = sinedependence(n, d, seed)
+            X, Y =  GSign(n,d, seed)
             Y = Y.reshape(-1,1)
             X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
 

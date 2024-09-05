@@ -35,13 +35,37 @@ parser.add_argument('-parallel', '--parallel', required = False, default = False
 args = parser.parse_args()
 
 
-def sinedependence(n,d,seed = 0):
+def generate_ISA(n,d,sigma_normal,alpha, seed = 0):
     np.random.seed(seed)
-    mean = np.zeros(d)
-    cov = np.eye(d)
-    X = np.random.multivariate_normal(mean, cov, n)
-    Z = np.random.randn(n)
-    Y = 20*np.sin(4*np.pi*(X[:,0]**2 + X[:,1]**2))+Z 
+    x = np.concatenate((np.random.normal(-1, sigma_normal, n//2), np.random.normal(1, sigma_normal, n//2)))
+    y = np.concatenate((np.random.normal(-1, sigma_normal, n//2), np.random.normal(1, sigma_normal, n//2)))
+    p = np.random.permutation(n)
+    y_p = y[p]
+
+    D = np.zeros([2,n])
+    D[0,:] = x
+    D[1,:] = y_p
+
+    theta = np.pi/4*alpha
+    c, s = np.cos(theta), np.sin(theta)
+    R = np.array(((c, -s), (s, c)))
+
+    D_R = R@D
+    X_mix = D_R[0,:].reshape(-1,1)
+    Y_mix = D_R[1,:].reshape(-1,1)
+
+    X_z = np.random.randn(n,d-1)
+    Y_z = np.random.randn(n,d-1)
+
+    X_con = np.concatenate((X_mix,X_z), axis=1)
+    Y_con = np.concatenate((Y_mix,Y_z), axis=1)
+
+    m_x = ortho_group.rvs(dim=d)
+    m_y = ortho_group.rvs(dim=d)
+
+    X = (m_x@X_con.T).T
+    Y = (m_y@Y_con.T).T
+    
     return X,Y
 
 def run():
@@ -54,19 +78,19 @@ def run():
         test_num = repetitions
         seed = 0 
     device = torch.device('cuda')
-    d = 3
-
-    sample_sizes = (300, 600,900,1200)
-    n_samples = len(sample_sizes)
+    sigma_normal = 0.01
+    n = 128
+    d = 4
+    alphas = np.linspace(0,1,10)
+    n_alphas = len(alphas)
     n_tests = 9
-    test_power = np.zeros([n_tests,n_samples, test_num])
+    test_power = np.zeros([n_tests,n_alphas, test_num])
     
 
-    for i, n in enumerate(sample_sizes):
+    for i, alpha in enumerate(alphas):
         for j in range(test_num):
-            print('sample size:', n, 'repetition: ', j)
-            X, Y = sinedependence(n, d, seed)
-            Y = Y.reshape(-1,1)
+            print('alpha:', alpha, 'repetition: ', j)
+            X, Y =generate_ISA(n,d,sigma_normal,alpha, seed)
             X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
 
             # alpha = 1.0, von Neumann Entropies

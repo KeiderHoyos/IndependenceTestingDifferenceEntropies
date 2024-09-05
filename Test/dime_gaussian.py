@@ -10,68 +10,101 @@ import torch
 import torch.nn as nn
 import torch.distributions as dist
 import copy
+from matplotlib import pyplot as plt
 
 class IndpTest_DIME():
-    def __init__(self, X,Y, dime_perm, alpha = 1.0, isotropic = True, epochs = 100, lr = 0.01, approx = False, order_approx = 4,  split_ratio = 0.5):
+    def __init__(self, X,Y, dime_perm, alpha = 1.0, isotropic = True, epochs = 200, lr = 0.01,  split_ratio = 0.5, batch_size = None):
         self.X = X
         self.Y = Y
         self.dime_perm = dime_perm
         self.alpha = alpha
-        self.approx = approx
-        self.order_approx = order_approx
         self.isotropic = isotropic
-        self.sigma_inverse = None
         self.split_ratio = split_ratio
         self.epochs = epochs
         self.lr = lr
+        self.batch_size = batch_size
+    def perform_test(self, significance = 0.05, permutations = 100, seed = 0): # SEED = 0
+        ### split the datasets ###
+        Xtr, Ytr, Xte, Yte = self.split_samples()
+        dime_null = []
+        self.fit(Xtr, Ytr, epochs = self.epochs, lr = self.lr, batch_size=self.batch_size)
+        dime = self.forward_normalized(Xte,Yte, seed = 0)
 
-    def fit(self, X, Y, epochs = 100, lr = 0.001, verbose = False):
+        # Set a different seed for permutations
+        perm_seed = seed 
+        for i in range(permutations):
+            torch.manual_seed(perm_seed)
+            idx_perm = torch.randperm(Xte.shape[0])
+            X_perm = Xte[idx_perm, :]
+            dime_null.append(self.forward_normalized(X_perm, Yte, seed = seed))
+            perm_seed += 1 
+        dime_null = torch.tensor(dime_null)
+        plt.hist(dime_null.cpu().numpy(), bins = 20)
+        thr_dime = torch.quantile(dime_null, (1 - significance))
+        
+        h0_rejected = (dime>thr_dime)
+        
+        results_all = {}
+        results_all["thresh"] = thr_dime
+        results_all["test_stat"] = dime
+        results_all["h0_rejected"] = h0_rejected
+        
+        return results_all
+
+    def fit(self, X, Y, epochs = 200, lr = 0.05, batch_size = None, verbose = True): # changed learning rate
+        sigma_x, sigma_y = self.grid_search_init(X, Y)
+        print('sigma_x: {}, sigma_y: {}'.format(sigma_x, sigma_y))
         if self.isotropic:
-            sigma_x, sigma_y = self.grid_search_init(X, Y)
             sigma_x = torch.tensor(sigma_x, device = X.device)
             sigma_y = torch.tensor(sigma_y, device = X.device)
             log_sigma_x = torch.log(sigma_x).clone().detach().requires_grad_(True)
             log_sigma_y = torch.log(sigma_y).clone().detach().requires_grad_(True)
             optimizer = torch.optim.Adam([log_sigma_x, log_sigma_y], lr=lr)
         else:
-            sigma_x, sigma_y = self.grid_search_init(X, Y)
             sigma_x = sigma_x*torch.eye(X.shape[1], device=X.device, dtype=X.dtype)
             A = sigma_x.inverse().clone().detach().requires_grad_(True) # matrix to perform metric transformation 
             sigma_y = torch.tensor(sigma_y, device = X.device)
             log_sigma_y = torch.log(sigma_y).clone().detach().requires_grad_(True)
             optimizer = torch.optim.Adam([A, log_sigma_y], lr=lr)
         seed = 0
+        n_samples = X.shape[0]
+        batch_size = n_samples if batch_size is None else batch_size
+        n_batches = n_samples // batch_size
+
         for i in range(epochs):
             optimizer.zero_grad()
-            if self.isotropic:
-                sigma_x = torch.exp(log_sigma_x)
-                sigma_y = torch.exp(log_sigma_y)
-                Kx = ku.gaussianKernel(X,X, sigma_x)
-                Ky = ku.gaussianKernel(Y,Y, sigma_y)
-            else:
-                sigma_y = torch.exp(log_sigma_y)
-                X_ = X @ A # metric transformation (Changing the scale in different dimensions)
-                Kx = ku.gaussianKernel(X_,X_,1) # sigma is one because we have already performed the metric transformation
-                Ky = ku.gaussianKernel(Y,Y,sigma_y)
-            # change seed every l epochs
-            seed = seed +  i // 100
-            mi = -1*dime(Kx,Ky,alpha=self.alpha, n_iters=self.dime_perm, seed = seed)
-            # if mi is positive don't update the parameters
-            if mi > 0:
-                mi = torch.tensor(0.0, device = X.device)
-                seed += 1
-            else: 
+            for j in range(n_batches):
+                start = j * batch_size
+                end = start + batch_size
+                X_batch = X[start:end]
+                Y_batch = Y[start:end]
+                
+                if self.isotropic:
+                    sigma_x = torch.exp(log_sigma_x)
+                    sigma_y = torch.exp(log_sigma_y)
+                    Kx = ku.gaussianKernel(X_batch, X_batch, sigma_x)
+                    Ky = ku.gaussianKernel(Y_batch, Y_batch, sigma_y)
+                else:
+                    sigma_y = torch.exp(log_sigma_y)
+                    X_ = X_batch @ A
+                    Kx = ku.gaussianKernel(X_, X_, 1)
+                    Ky = ku.gaussianKernel(Y_batch, Y_batch, sigma_y)
+                
+                
+                mi = -1 * dime_normalized(Kx, Ky, alpha=self.alpha, n_iters=self.dime_perm, seed=seed)
                 mi.backward()
                 optimizer.step()
-
-            if verbose and i % 99 == 0:
-                # print('sigma_x: {}, sigma_y: {}'.format(sigma_x.item(), sigma_y.item()))
-                print('Iteration: {}, DiME: {}'.format(i,-1*mi.item()))
+                seed += 1
+            if verbose and i % 10 == 0:
+                print('Iteration: {}, DiME: {}'.format(i, -1 * mi.item()))
         if self.isotropic:
+            sigma_x = torch.exp(log_sigma_x)
+            sigma_y = torch.exp(log_sigma_y)
             self.sigma_x = sigma_x.detach().item()
             self.sigma_y = sigma_y.detach().item()
         else:
             self.A = A.detach()
+            sigma_y = torch.exp(log_sigma_y)
             self.sigma_y = sigma_y.detach().item()
     def grid_search_init(self, X, Y):
         """
@@ -82,8 +115,8 @@ class IndpTest_DIME():
         pairwise_matrix_y = torch.cdist(Y, Y, p = 2)  # l1 and l2 distances
         # Collection of bandwidths
         def compute_bandwidths(distances, n_bandwiths):
-            median = torch.median(distances)
-            bandwidths = median*2**torch.linspace(-3, 3, n_bandwiths, device=X.device)
+            median = torch.median(distances[distances>0])
+            bandwidths = torch.sqrt(0.5*median)*2**torch.linspace(-2, 3, n_bandwiths, device=X.device) # torch.linspace(-3, 3, n_bandwiths, device=X.device)
             return bandwidths
 
         triu_indices = torch.triu_indices(pairwise_matrix_x.shape[0],pairwise_matrix_x.shape[0], offset=0)
@@ -98,35 +131,14 @@ class IndpTest_DIME():
 
                 Kx = ku.gaussianKernel(X,X, sigma_x)
                 Ky = ku.gaussianKernel(Y,Y, sigma_y)
-                mi = dime(Kx,Ky,alpha=self.alpha, n_iters=self.dime_perm, seed = 0)
+                mi = dime_normalized(Kx,Ky,alpha=self.alpha, n_iters=2*self.dime_perm, seed = 0) # 2 times to have a good estimate of DiME 
                 dime_pair.append(mi.item())
                 sigma_pair.append((sigma_x.item(), sigma_y.item()))
 
         dime_array = np.array(dime_pair)
         indm = np.argmax(dime_array)
-
+        print('Max DiME_n: {}'.format(dime_array[indm]))
         return sigma_pair[indm]
-
-    def perform_test(self, significance = 0.05, permutations = 100, seed = 0):
-        torch.manual_seed(seed)
-                ### split the datasets ###
-        Xtr, Ytr, Xte, Yte = self.split_samples()
-        dime_null = []
-        self.fit(Xtr, Ytr, epochs = self.epochs, lr = self.lr)
-        for i in range(permutations):
-            X_perm = Xte[torch.randperm(Xte.shape[0])]
-            dime_null.append(self.forward(X_perm, Yte, seed = seed)) 
-        dime_null = torch.tensor(dime_null)
-        thr_dime = torch.quantile(dime_null, (1 - significance))
-        dime = self.forward(Xte,Yte, seed=seed)
-        h0_rejected = (dime>thr_dime)
-        
-        results_all = {}
-        results_all["thresh"] = thr_dime
-        results_all["test_stat"] = dime
-        results_all["h0_rejected"] = h0_rejected
-        
-        return results_all
 
     def split_samples(self):
         """
@@ -164,6 +176,28 @@ class IndpTest_DIME():
                 Kx = ku.gaussianKernel(X_,X_,1) # sigma is one because we have already performed the metric transformation
                 Ky = ku.gaussianKernel(Y,Y,self.sigma_y)
             mi = dime(Kx,Ky, alpha=self.alpha, n_iters=self.dime_perm, seed = seed)
+        return mi
+    def forward_normalized(self, X, Y, seed = None):
+        with torch.no_grad():
+            if self.isotropic:
+                Kx = ku.gaussianKernel(X,X, self.sigma_x)
+                Ky = ku.gaussianKernel(Y,Y, self.sigma_y)
+            else:
+                X_ = X @ self.A # metric transformation (Changing the scale in different dimensions)
+                Kx = ku.gaussianKernel(X_,X_,1) # sigma is one because we have already performed the metric transformation
+                Ky = ku.gaussianKernel(Y,Y,self.sigma_y)
+            mi = dime_normalized(Kx,Ky, alpha=self.alpha, n_iters=self.dime_perm, seed = seed)
+        return mi
+    def forward_mi(self, X, Y, seed = None):
+        with torch.no_grad():
+            if self.isotropic:
+                Kx = ku.gaussianKernel(X,X, self.sigma_x)
+                Ky = ku.gaussianKernel(Y,Y, self.sigma_y)
+            else:
+                X_ = X @ self.A # metric transformation (Changing the scale in different dimensions)
+                Kx = ku.gaussianKernel(X_,X_,1) # sigma is one because we have already performed the metric transformation
+                Ky = ku.gaussianKernel(Y,Y,self.sigma_y)
+            mi = mutual_information(Kx, Ky, alpha=self.alpha)
         return mi
 
     
@@ -209,6 +243,82 @@ def dime(Kx, Ky, alpha, n_iters=1, shouldReturnComponents = False, seed = None):
         return H_perm_avg - H, H, H_perm_avg
     
     return H_perm_avg - H
+
+def dime_normalized(Kx, Ky, alpha, n_iters=1, seed = None):
+    """
+    Computes the difference of entropy equation of the following form. Let P be a random permutation matrix
+    
+    doe(Kx, Ky) = EXPECTATION[ H_alpha(Kx, P Ky P) - H_alpha(Kx, Ky)]
+    """
+    if seed is not None:
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+    if alpha != 1:
+        H = itl.matrixAlphaJointEntropy([Kx, Ky], alpha=alpha)
+    else:
+        H = vonNeumannEntropy(Kx*Ky)
+    
+    H_perm_ = []
+    for i in range(n_iters):
+        if alpha != 1:
+            H_perm = itl.matrixAlphaJointEntropy([Kx, permuteGram(Ky)], alpha=alpha)
+        else:
+            H_perm = vonNeumannEntropy(Kx*permuteGram(Ky))
+        H_perm_.append(H_perm)
+
+        # compute mean and standard deviation of H_perm_
+    H_perm = torch.stack(H_perm_)
+    H_perm_avg = torch.mean(H_perm)
+    H_perm_std = torch.std(H_perm)
+    dime_normalized = (H_perm_avg - H) / (H_perm_std + 1e-15)
+    
+    return dime_normalized
+
+
+
+
+def dime_max(Kx, Ky, alpha, n_iters=1, shouldReturnComponents = False, seed = None):
+    """
+    Computes the difference of entropy equation of the following form. Let P be a random permutation matrix
+    
+    doe(Kx, Ky) = EXPECTATION[ H_alpha(Kx, P Ky P) - H_alpha(Kx, Ky)]
+    """
+    if seed is not None:
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+    if alpha != 1:
+        H = itl.matrixAlphaJointEntropy([Kx, Ky], alpha=alpha)
+    else:
+        H = vonNeumannEntropy(Kx*Ky)
+    
+    H_perm_ = []
+    for i in range(n_iters):
+        if alpha != 1:
+            H_perm = itl.matrixAlphaJointEntropy([Kx, permuteGram(Ky)], alpha=alpha)
+        else:
+            H_perm = vonNeumannEntropy(Kx*permuteGram(Ky))
+
+        H_perm_.append(H_perm)
+    
+    H_perm_max = torch.max(torch.stack(H_perm_))
+    
+    if shouldReturnComponents:
+        return H_perm_max - H, H, H_perm_max
+    
+    return H_perm_max - H
+
+def mutual_information(Kx, Ky, alpha):
+    """
+    Computes the kernel based mutual information
+    """
+    if alpha != 1:
+        MI = itl.matrixAlphaMutualInformation(Kx, Ky, alpha)
+    else:
+        Hx =vonNeumannEntropy(Kx)
+        Hy = vonNeumannEntropy(Ky)
+        Hxy = vonNeumannEntropy(Kx*Ky)
+        MI = Hx + Hy - Hxy
+    return MI
 
 
 def vonNeumannEntropy(K, normalize = True, rank = None, retrieve_rank = False):
