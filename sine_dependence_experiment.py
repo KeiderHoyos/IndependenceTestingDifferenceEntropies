@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import seaborn as sns
 import scipy.stats as stats
 from scipy.stats import gamma
 from scipy.stats import ortho_group
