@@ -11,7 +11,7 @@ import scipy.stats as stats
 from scipy.stats import gamma
 from scipy.stats import ortho_group
 
-import cupy as cp
+# import cupy as cp
 import cupyx.scipy 
 
 from Test.hsic_naive import IndpTest_naive

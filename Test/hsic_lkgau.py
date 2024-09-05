@@ -8,7 +8,7 @@ import scipy.stats as stats
 from scipy.stats import gamma
 from Test.hsic_naive import IndpTest
 
-import cupy as cp
+# import cupy as cp
 import cupyx.scipy 
 from Test.kernels import rbf_kernel, kernel_midwidth_rbf
 """
