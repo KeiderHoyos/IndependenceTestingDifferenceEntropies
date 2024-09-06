@@ -13,7 +13,7 @@ import copy
 from matplotlib import pyplot as plt
 
 class IndpTest_DIME():
-    def __init__(self, X,Y, dime_perm, alpha = 1.0, isotropic = True, epochs = 200, lr = 0.01,  split_ratio = 0.5, batch_size = None):
+    def __init__(self, X,Y, dime_perm, alpha = 1.0, isotropic = True, epochs = 500, lr = 0.01,  split_ratio = 0.5, batch_size = None):
         self.X = X
         self.Y = Y
         self.dime_perm = dime_perm
@@ -51,7 +51,7 @@ class IndpTest_DIME():
         
         return results_all
 
-    def fit(self, X, Y, epochs = 200, lr = 0.05, batch_size = None, verbose = True): # changed learning rate
+    def fit(self, X, Y, epochs = 200, lr = 0.05, batch_size = None, verbose = False): # changed learning rate
         sigma_x, sigma_y = self.grid_search_init(X, Y)
         print('sigma_x: {}, sigma_y: {}'.format(sigma_x, sigma_y))
         if self.isotropic:
