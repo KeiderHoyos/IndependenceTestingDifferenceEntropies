@@ -13,7 +13,7 @@ import copy
 from matplotlib import pyplot as plt
 
 class IndpTest_DIME():
-    def __init__(self, X,Y, dime_perm, alpha = 1.0, isotropic = True, epochs = 500, lr = 0.01,  split_ratio = 0.5, batch_size = None):
+    def __init__(self, X,Y, dime_perm, alpha = 1.0, isotropic = True, epochs = 200, lr = 0.01,  split_ratio = 0.5, batch_size = None):
         self.X = X
         self.Y = Y
         self.dime_perm = dime_perm

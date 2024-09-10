@@ -77,7 +77,7 @@ def run():
         test_num = repetitions
         seed = 0 
     device = torch.device('cuda')
-    sigma_normal = 0.01
+    sigma_normal = 0.1 #Check github code for the correct value (0.1 here: https://github.com/renyixin666/HSIC-LK/commit/a718bc42228ee82cbb3e7719ee7c9d6b8a1f62a2), according to paper 0.01
     n = 128
     d = 4
     alphas = np.linspace(0,1,10)
