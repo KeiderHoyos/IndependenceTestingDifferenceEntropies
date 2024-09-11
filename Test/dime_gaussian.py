@@ -13,7 +13,11 @@ import copy
 from matplotlib import pyplot as plt
 
 class IndpTest_DIME():
-    def __init__(self, X,Y, dime_perm, alpha = 1.0, isotropic = True, epochs = 200, lr = 0.01,  split_ratio = 0.5, batch_size = None):
+    def __init__(self, X,Y, dime_perm, 
+                 alpha = 1.0, isotropic = True, 
+                 epochs = 200, lr = 0.01,  split_ratio = 0.5, 
+                 batch_size = None, 
+                 grid_seearch_min = -3, grid_search_max = 3):
         self.X = X
         self.Y = Y
         self.dime_perm = dime_perm
@@ -23,6 +27,8 @@ class IndpTest_DIME():
         self.epochs = epochs
         self.lr = lr
         self.batch_size = batch_size
+        self.grid_search_min = grid_seearch_min
+        self.grid_search_max = grid_search_max
     def perform_test(self, significance = 0.05, permutations = 100, seed = 0): # SEED = 0
         ### split the datasets ###
         Xtr, Ytr, Xte, Yte = self.split_samples()
@@ -67,11 +73,18 @@ class IndpTest_DIME():
             log_sigma_y = torch.log(sigma_y).clone().detach().requires_grad_(True)
             optimizer = torch.optim.Adam([A, log_sigma_y], lr=lr)
         seed = 0
+        # set seed
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
         n_samples = X.shape[0]
         batch_size = n_samples if batch_size is None else batch_size
         n_batches = n_samples // batch_size
 
         for i in range(epochs):
+            # shuffle the data
+            p = torch.randperm(n_samples)
+            X = X[p]
+            Y = Y[p]
             optimizer.zero_grad()
             for j in range(n_batches):
                 start = j * batch_size
@@ -116,7 +129,7 @@ class IndpTest_DIME():
         # Collection of bandwidths
         def compute_bandwidths(distances, n_bandwiths):
             median = torch.median(distances[distances>0])
-            bandwidths = torch.sqrt(0.5*median)*2**torch.linspace(-2, 3, n_bandwiths, device=X.device) # torch.linspace(-3, 3, n_bandwiths, device=X.device)
+            bandwidths = torch.sqrt(0.5*median)*2**torch.linspace(self.grid_search_min, self.grid_search_max, n_bandwiths, device=X.device) # torch.linspace(-3, 3, n_bandwiths, device=X.device)
             return bandwidths
 
         triu_indices = torch.triu_indices(pairwise_matrix_x.shape[0],pairwise_matrix_x.shape[0], offset=0)
