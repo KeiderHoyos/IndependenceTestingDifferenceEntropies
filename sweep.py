@@ -32,7 +32,7 @@ parser.add_argument('-e', '--experiment-name', required=True, help='Experiment n
 parser.add_argument('-dime_perm', '--dime_perm', required = False, default = 10, type = int)
 parser.add_argument('-epochs', '--epochs', required = False, default = 200, type = int)
 parser.add_argument('-lr', '--lr', required = False, default = 0.01, type = float)
-parser.add_argument('-batch_size', '--batch_size', required = False, default = None)
+parser.add_argument('-batch_size', '--batch_size', required = False, default = None, type = int)
 parser.add_argument('-grid_search_min', '--grid_search_min', required = False, default = -3, type = int)
 parser.add_argument('-grid_search_max', '--grid_search_max', required = False, default = 3, type = int)
 
