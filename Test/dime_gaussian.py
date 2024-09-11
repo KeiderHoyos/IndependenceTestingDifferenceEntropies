@@ -17,7 +17,7 @@ class IndpTest_DIME():
                  alpha = 1.0, isotropic = True, 
                  epochs = 200, lr = 0.01,  split_ratio = 0.5, 
                  batch_size = None, 
-                 grid_seearch_min = -3, grid_search_max = 3):
+                 grid_search_min = -3, grid_search_max = 3):
         self.X = X
         self.Y = Y
         self.dime_perm = dime_perm
@@ -27,7 +27,7 @@ class IndpTest_DIME():
         self.epochs = epochs
         self.lr = lr
         self.batch_size = batch_size
-        self.grid_search_min = grid_seearch_min
+        self.grid_search_min = grid_search_min
         self.grid_search_max = grid_search_max
     def perform_test(self, significance = 0.05, permutations = 100, seed = 0): # SEED = 0
         ### split the datasets ###
