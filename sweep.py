@@ -77,12 +77,12 @@ def run():
                                             grid_search_min = args.grid_search_min,
                                             grid_search_max = args.grid_search_max)
             results_dime = dime_estimator.perform_test()
-            test_power[1, i, j] = float(results_dime['h0_rejected'])
+            test_power[i, j] = float(results_dime['h0_rejected'])
 
             seed += 1
             # average test power
             # compute the average test power
-            avg_test_power = np.mean(np.squeeze(test_power[1, i, :j+1]))
+            avg_test_power = np.mean(np.squeeze(test_power[i, :j+1]))
             wandb.log({"avg_test_power": avg_test_power})  
 
 
