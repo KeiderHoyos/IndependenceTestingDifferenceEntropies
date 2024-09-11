@@ -55,35 +55,32 @@ def run():
     seed = 0 
     device = torch.device('cuda')
     d = 3
-
-    sample_sizes = (600,)
-    n_samples = len(sample_sizes)
-    n_tests = 1
-    test_power = np.zeros([n_tests,n_samples, test_num])
+    n = 600
+    test_power = np.zeros([test_num])
     
-    for i, n in enumerate(sample_sizes):
-        for j in range(test_num):
-            print('sample size:', n, 'repetition: ', j)
-            X, Y = sinedependence(n, d, seed)
-            Y = Y.reshape(-1,1)
-            X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
+    
+    for j in range(test_num):
+        print('sample size:', n, 'repetition: ', j)
+        X, Y = sinedependence(n, d, seed)
+        Y = Y.reshape(-1,1)
+        X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
 
-            # alpha = 1.0, von Neumann Entropies
+        # alpha = 1.0, von Neumann Entropies
 
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor ,
-                                            alpha = 1.0, isotropic = False, 
-                                            dime_perm = args.dime_perm , lr = args.lr,
-                                            epochs = args.epochs, batch_size = args.batch_size,
-                                            grid_search_min = args.grid_search_min,
-                                            grid_search_max = args.grid_search_max)
-            results_dime = dime_estimator.perform_test()
-            test_power[i, j] = float(results_dime['h0_rejected'])
+        dime_estimator = IndpTest_DIME( X_tensor, Y_tensor ,
+                                        alpha = 1.0, isotropic = False, 
+                                        dime_perm = args.dime_perm , lr = args.lr,
+                                        epochs = args.epochs, batch_size = args.batch_size,
+                                        grid_search_min = args.grid_search_min,
+                                        grid_search_max = args.grid_search_max)
+        results_dime = dime_estimator.perform_test()
+        test_power[j] = float(results_dime['h0_rejected'])
 
-            seed += 1
-            # average test power
-            # compute the average test power
-            avg_test_power = np.mean(np.squeeze(test_power[i, :j+1]))
-            wandb.log({"avg_test_power": avg_test_power})  
+        seed += 1
+        # average test power
+        # compute the average test power
+        avg_test_power = np.mean(test_power[:j+1])
+        wandb.log({"avg_test_power": avg_test_power})  
 
 
 if __name__ == "__main__":
