@@ -30,6 +30,12 @@ parser.add_argument('-e', '--experiment-name', required=True, help='Experiment n
 parser.add_argument('-rId', '--repId',required=False, default= 1, help = 'repetition Id to store the results', type=int)
 parser.add_argument('-datafolder', '--DATAFOLDER', required = True, type = str )
 parser.add_argument('-parallel', '--parallel', required = False, default = False, type = bool)
+parser.add_argument('-dime_perm', '--dime_perm', required = False, default = 10, type = int)
+parser.add_argument('-epochs', '--epochs', required = False, default = 500, type = int)
+parser.add_argument('-lr', '--lr', required = False, default = 0.07, type = float)
+parser.add_argument('-batch_size', '--batch_size', required = False, default = 100, type = int)
+parser.add_argument('-grid_search_min', '--grid_search_min', required = False, default = -2, type = int)
+parser.add_argument('-grid_search_max', '--grid_search_max', required = False, default = 4, type = int)
 
 args = parser.parse_args()
 
@@ -80,29 +86,53 @@ def run():
             X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
 
             # alpha = 1.0, von Neumann Entropies
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 1.0, isotropic = True)
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 1.0, isotropic = True,
+                                            dime_perm = args.dime_perm , lr = args.lr,
+                                            epochs = args.epochs, batch_size = args.batch_size,
+                                            grid_search_min = args.grid_search_min,
+                                            grid_search_max = args.grid_search_max)
             results_dime = dime_estimator.perform_test()
             test_power[0, i, j] = float(results_dime['h0_rejected'])
             
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 1.0, isotropic = False)
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 1.0, isotropic = False,
+                                            dime_perm = args.dime_perm , lr = args.lr,
+                                            epochs = args.epochs, batch_size = args.batch_size,
+                                            grid_search_min = args.grid_search_min,
+                                            grid_search_max = args.grid_search_max)
             results_dime = dime_estimator.perform_test()
             test_power[1, i, j] = float(results_dime['h0_rejected'])
 
             # alpha = 2.0, Rényi Entropies
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 2.0, isotropic = True)
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 2.0, isotropic = True,
+                                            dime_perm = args.dime_perm , lr = args.lr,
+                                            epochs = args.epochs, batch_size = args.batch_size,
+                                            grid_search_min = args.grid_search_min,
+                                            grid_search_max = args.grid_search_max)
             results_dime = dime_estimator.perform_test()
             test_power[2, i, j] = float(results_dime['h0_rejected'])
             
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 2.0, isotropic = False)
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 2.0, isotropic = False, 
+                                            dime_perm = args.dime_perm , lr = args.lr,
+                                            epochs = args.epochs, batch_size = args.batch_size,
+                                            grid_search_min = args.grid_search_min,
+                                            grid_search_max = args.grid_search_max)
             results_dime = dime_estimator.perform_test()
             test_power[3, i, j] = float(results_dime['h0_rejected'])
 
             # alpha = 0.5, Rényi Entropies    
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 0.5, isotropic = True)
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 0.5, isotropic = True,
+                                            dime_perm = args.dime_perm , lr = args.lr,
+                                            epochs = args.epochs, batch_size = args.batch_size,
+                                            grid_search_min = args.grid_search_min,
+                                            grid_search_max = args.grid_search_max)
             results_dime = dime_estimator.perform_test()
             test_power[4, i, j] = float(results_dime['h0_rejected'])
         
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 0.5, isotropic = False)
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, dime_perm = 10, alpha = 0.5, isotropic = False,
+                                            dime_perm = args.dime_perm , lr = args.lr,
+                                            epochs = args.epochs, batch_size = args.batch_size,
+                                            grid_search_min = args.grid_search_min,
+                                            grid_search_max = args.grid_search_max)
             results_dime = dime_estimator.perform_test()
             test_power[5, i, j] = float(results_dime['h0_rejected'])
 
