@@ -79,14 +79,14 @@ def run():
     seed = 0 
     device = torch.device('cuda')
     test_power = np.zeros([test_num])
-    
+    n = 128
+    d = 4
+    sigma_normal = 0.1
+    alpha = 0.6666 
     
     for j in range(test_num):
         print('sample size:', n, 'repetition: ', j)
-        n = 128
-        d = 4
-        sigma_normal = 0.1
-        alpha = 0.6666 
+
         X, Y =  generate_ISA(n,d,sigma_normal,alpha, seed = 0)
         Y = Y.reshape(-1,1)
         X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
