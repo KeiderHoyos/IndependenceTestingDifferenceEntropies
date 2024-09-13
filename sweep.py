@@ -88,7 +88,8 @@ def run():
         print('sample size:', n, 'repetition: ', j)
 
         X, Y =  generate_ISA(n,d,sigma_normal,alpha, seed = 0)
-        Y = Y.reshape(-1,1)
+        print(Y.shape)
+        # Y = Y.reshape(-1,1)
         X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
 
         # alpha = 1.0, von Neumann Entropies
