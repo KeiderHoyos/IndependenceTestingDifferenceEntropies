@@ -32,7 +32,7 @@ parser.add_argument('-e', '--experiment-name', required=True, help='Experiment n
 parser.add_argument('-dime_perm', '--dime_perm', required = False, default = 10, type = int)
 parser.add_argument('-epochs', '--epochs', required = False, default = 200, type = int)
 parser.add_argument('-lr', '--lr', required = False, default = 0.07, type = float)
-parser.add_argument('-batch_size', '--batch_size', required = False, default = 100, type = int)
+parser.add_argument('-batch_size', '--batch_size', required = False, default = None, type = int)
 parser.add_argument('-grid_search_min', '--grid_search_min', required = False, default = -2, type = int)
 parser.add_argument('-grid_search_max', '--grid_search_max', required = False, default = 4, type = int)
 
@@ -40,13 +40,37 @@ args = parser.parse_args()
 
 wandb.init(project='independence_testing', name=args.experiment_name)
 
-def sinedependence(n,d,seed = 0):
+def generate_ISA(n,d,sigma_normal,alpha, seed = 0):
     np.random.seed(seed)
-    mean = np.zeros(d)
-    cov = np.eye(d)
-    X = np.random.multivariate_normal(mean, cov, n)
-    Z = np.random.randn(n)
-    Y = 20*np.sin(4*np.pi*(X[:,0]**2 + X[:,1]**2))+Z 
+    x = np.concatenate((np.random.normal(-1, sigma_normal, n//2), np.random.normal(1, sigma_normal, n//2)))
+    y = np.concatenate((np.random.normal(-1, sigma_normal, n//2), np.random.normal(1, sigma_normal, n//2)))
+    p = np.random.permutation(n)
+    y_p = y[p]
+
+    D = np.zeros([2,n])
+    D[0,:] = x
+    D[1,:] = y_p
+
+    theta = np.pi/4*alpha
+    c, s = np.cos(theta), np.sin(theta)
+    R = np.array(((c, -s), (s, c)))
+
+    D_R = R@D
+    X_mix = D_R[0,:].reshape(-1,1)
+    Y_mix = D_R[1,:].reshape(-1,1)
+
+    X_z = np.random.randn(n,d-1)
+    Y_z = np.random.randn(n,d-1)
+
+    X_con = np.concatenate((X_mix,X_z), axis=1)
+    Y_con = np.concatenate((Y_mix,Y_z), axis=1)
+
+    m_x = ortho_group.rvs(dim=d)
+    m_y = ortho_group.rvs(dim=d)
+
+    X = (m_x@X_con.T).T
+    Y = (m_y@Y_con.T).T
+    
     return X,Y
 
 def run():
@@ -54,14 +78,16 @@ def run():
     test_num = repetitions
     seed = 0 
     device = torch.device('cuda')
-    d = 3
-    n = 600
     test_power = np.zeros([test_num])
     
     
     for j in range(test_num):
         print('sample size:', n, 'repetition: ', j)
-        X, Y = sinedependence(n, d, seed)
+        n = 128
+        d = 4
+        sigma_normal = 0.1
+        alpha = 0.6666 
+        X, Y =  generate_ISA(n,d,sigma_normal,alpha, seed = 0)
         Y = Y.reshape(-1,1)
         X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
 

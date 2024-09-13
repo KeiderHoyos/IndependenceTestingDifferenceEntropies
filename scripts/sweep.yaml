@@ -1,0 +1,27 @@
+program: sweep.py
+method: random
+project: independence_testing
+metric:
+  name: avg_test_power
+  goal: maximize
+parameters:
+  experiment-name:
+    value: 'dime_isa_sweep'
+  dime_perm:
+    values: [1, 5, 10, 15]
+  lr:
+    min: 0.001
+    max: 0.5
+  epochs:
+    values: [50,75,100,200,500]
+  grid_search_min:
+    values: [-4, -3, -2, -1, 0]
+  grid_search_max:
+    values: [1, 2, 3, 4]
+  
+
+command:  #   - ${env}
+  - python3
+  - -u
+  - ${program}
+  - ${args}   # args_no_hyphens
