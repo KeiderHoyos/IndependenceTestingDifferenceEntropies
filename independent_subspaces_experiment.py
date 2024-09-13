@@ -33,7 +33,7 @@ parser.add_argument('-parallel', '--parallel', required = False, default = False
 parser.add_argument('-dime_perm', '--dime_perm', required = False, default = 10, type = int)
 parser.add_argument('-epochs', '--epochs', required = False, default = 500, type = int)
 parser.add_argument('-lr', '--lr', required = False, default = 0.07, type = float)
-parser.add_argument('-batch_size', '--batch_size', required = False, default = 100, type = int)
+parser.add_argument('-batch_size', '--batch_size', required = False, default = None, type = int)
 parser.add_argument('-grid_search_min', '--grid_search_min', required = False, default = -2, type = int)
 parser.add_argument('-grid_search_max', '--grid_search_max', required = False, default = 4, type = int)
 
