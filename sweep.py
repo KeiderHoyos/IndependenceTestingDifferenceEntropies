@@ -87,7 +87,7 @@ def run():
     for j in range(test_num):
         print('sample size:', n, 'repetition: ', j)
 
-        X, Y =  generate_ISA(n,d,sigma_normal,alpha, seed = 0)
+        X, Y =  generate_ISA(n,d,sigma_normal,alpha, seed = seed)
         print(Y.shape)
         # Y = Y.reshape(-1,1)
         X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)

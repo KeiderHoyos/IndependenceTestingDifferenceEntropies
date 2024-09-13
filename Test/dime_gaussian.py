@@ -34,7 +34,7 @@ class IndpTest_DIME():
         Xtr, Ytr, Xte, Yte = self.split_samples()
         dime_null = []
         self.fit(Xtr, Ytr, epochs = self.epochs, lr = self.lr, batch_size=self.batch_size)
-        dime = self.forward_normalized(Xte,Yte, seed = 0)
+        dime = self.forward_normalized(Xte,Yte, seed = seed)
 
         # Set a different seed for permutations
         perm_seed = seed 
@@ -261,7 +261,7 @@ def dime_normalized(Kx, Ky, alpha, n_iters=1, seed = None):
     """
     Computes the difference of entropy equation of the following form. Let P be a random permutation matrix
     
-    doe(Kx, Ky) = EXPECTATION[ H_alpha(Kx, P Ky P) - H_alpha(Kx, Ky)]
+    doe(Kx, Ky) = EXPECTATION[ H_alpha(Kx, P Ky P) - H_alpha(Kx, Ky)]/STD[ H_alpha(Kx, P Ky P)]
     """
     if seed is not None:
         torch.manual_seed(seed)
@@ -382,19 +382,19 @@ def vonNeumannEntropy_approx(K, order=4):
     K = K/K.trace()
     return torch.trace(- K @ matrix_log(K, order))
 
-def permuteGram(K, seed = None):
-    """
-    Randomly permutes the rows and columns of a square matrix
-    """
-    if seed is not None:
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
+# def permuteGram(K, seed = None):
+#     """
+#     Randomly permutes the rows and columns of a square matrix
+#     """
+#     if seed is not None:
+#         torch.manual_seed(seed)
+#         torch.cuda.manual_seed(seed)
 
-    assert K.shape[0] == K.shape[1], f"matrix dimensions must be the same"
-    idx = torch.randperm(K.shape[0])
-    K = K[idx, :]
-    K = K[:, idx]
-    return K
+#     assert K.shape[0] == K.shape[1], f"matrix dimensions must be the same"
+#     idx = torch.randperm(K.shape[0])
+#     K = K[idx, :]
+#     K = K[:, idx]
+#     return K
 
 
 
