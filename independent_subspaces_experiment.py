@@ -31,10 +31,10 @@ parser.add_argument('-rId', '--repId',required=False, default= 1, help = 'repeti
 parser.add_argument('-datafolder', '--DATAFOLDER', required = True, type = str )
 parser.add_argument('-parallel', '--parallel', required = False, default = False, type = bool)
 parser.add_argument('-dime_perm', '--dime_perm', required = False, default = 5, type = int)
-parser.add_argument('-epochs', '--epochs', required = False, default = 50, type = int)
-parser.add_argument('-lr', '--lr', required = False, default = 0.075, type = float)
+parser.add_argument('-epochs', '--epochs', required = False, default = 200, type = int)
+parser.add_argument('-lr', '--lr', required = False, default = 0.01, type = float)
 parser.add_argument('-batch_size', '--batch_size', required = False, default = None, type = int)
-parser.add_argument('-grid_search_min', '--grid_search_min', required = False, default = 0, type = int)
+parser.add_argument('-grid_search_min', '--grid_search_min', required = False, default = -1, type = int)
 parser.add_argument('-grid_search_max', '--grid_search_max', required = False, default = 4, type = int)
 
 args = parser.parse_args()
@@ -83,7 +83,7 @@ def run():
         test_num = repetitions
         seed = 0 
     device = torch.device('cuda')
-    sigma_normal = 0.1 #Check github code for the correct value (0.1 here: https://github.com/renyixin666/HSIC-LK/commit/a718bc42228ee82cbb3e7719ee7c9d6b8a1f62a2), according to paper 0.01
+    sigma_normal = 0.1 # 0.01 Check github code for the correct value (0.1 here: https://github.com/renyixin666/HSIC-LK/commit/a718bc42228ee82cbb3e7719ee7c9d6b8a1f62a2), according to paper 0.01
     n = 128
     d = 4
     alphas = np.linspace(0,1,10)

@@ -14,15 +14,29 @@ from matplotlib import pyplot as plt
 
 class IndpTest_DIME():
     def __init__(self, X,Y, dime_perm, 
-                 alpha = 1.0, isotropic = True, 
+                 alpha = 1.0, type_bandwidth = 'diagonal', 
                  epochs = 200, lr = 0.01,  split_ratio = 0.5, 
                  batch_size = None, 
-                 grid_search_min = -3, grid_search_max = 3):
+                 grid_search_min = -1, grid_search_max = 3):
+        """
+        X: numpy array of shape (n_samples, n_features)
+        Y: numpy array of shape (n_samples, n_features)
+        dime_perm: number of permutations to estimate the DiME
+        alpha: Rényi entropy parameter
+        type_bandwidth: 'isotropic', 'diagonal', 'anisotropic'
+        epochs: number of epochs
+        lr: learning rate
+        split_ratio: ratio of splitting the dataset into train/test
+        batch_size: batch size
+        grid_search_min: minimum value of the grid search
+        grid_search_max: maximum value of the grid search
+        """
+        assert type_bandwidth in ['isotropic', 'diagonal', 'anisotropic'], f"Invalid type_bandwidth: {type_bandwidth}"
         self.X = X
         self.Y = Y
         self.dime_perm = dime_perm
         self.alpha = alpha
-        self.isotropic = isotropic
+        self.type_bandwidth = type_bandwidth
         self.split_ratio = split_ratio
         self.epochs = epochs
         self.lr = lr
@@ -57,15 +71,23 @@ class IndpTest_DIME():
         
         return results_all
 
-    def fit(self, X, Y, epochs = 200, lr = 0.05, batch_size = None, verbose = False): # changed learning rate
+    def fit(self, X, Y, epochs = 200, lr = 0.01, batch_size = None, verbose = True): # changed learning rate
         sigma_x, sigma_y = self.grid_search_init(X, Y)
         print('sigma_x: {}, sigma_y: {}'.format(sigma_x, sigma_y))
-        if self.isotropic:
+        if self.type_bandwidth == 'isotropic':
             sigma_x = torch.tensor(sigma_x, device = X.device)
             sigma_y = torch.tensor(sigma_y, device = X.device)
             log_sigma_x = torch.log(sigma_x).clone().detach().requires_grad_(True)
             log_sigma_y = torch.log(sigma_y).clone().detach().requires_grad_(True)
             optimizer = torch.optim.Adam([log_sigma_x, log_sigma_y], lr=lr)
+        elif self.type_bandwidth == 'diagonal':
+            sigma_x = torch.tensor(sigma_x, device = X.device)
+            sigma_y = torch.tensor(sigma_y, device = X.device)
+            sigma_x_diag_vals = torch.ones(X.shape[1], device=X.device, dtype=X.dtype)*sigma_x
+            sigma_y_diag_vals = torch.ones(Y.shape[1], device=Y.device, dtype=Y.dtype)*sigma_y
+            log_sigma_x_diag_vals = torch.log(sigma_x_diag_vals).clone().detach().requires_grad_(True)
+            log_sigma_y_diag_vals = torch.log(sigma_y_diag_vals).clone().detach().requires_grad_(True)
+            optimizer = torch.optim.Adam([log_sigma_x_diag_vals, log_sigma_y_diag_vals], lr=lr)
         else:
             sigma_x = sigma_x*torch.eye(X.shape[1], device=X.device, dtype=X.dtype)
             A = sigma_x.inverse().clone().detach().requires_grad_(True) # matrix to perform metric transformation 
@@ -92,17 +114,23 @@ class IndpTest_DIME():
                 X_batch = X[start:end]
                 Y_batch = Y[start:end]
                 
-                if self.isotropic:
+                if self.type_bandwidth == 'isotropic':
                     sigma_x = torch.exp(log_sigma_x)
                     sigma_y = torch.exp(log_sigma_y)
                     Kx = ku.gaussianKernel(X_batch, X_batch, sigma_x)
                     Ky = ku.gaussianKernel(Y_batch, Y_batch, sigma_y)
+                elif self.type_bandwidth == 'diagonal':
+                    sigma_x_diag_vals = torch.exp(log_sigma_x_diag_vals)
+                    sigma_y_diag_vals = torch.exp(log_sigma_y_diag_vals)
+                    X_weighted = X_batch/sigma_x_diag_vals  # performs column-wise division, equivalent to X_batch @ diag(1/sigma_x_diag_vals)
+                    Y_weighted = Y_batch/sigma_y_diag_vals
+                    Kx = ku.gaussianKernel(X_weighted, X_weighted, 1)
+                    Ky = ku.gaussianKernel(Y_weighted, Y_weighted, 1)
                 else:
                     sigma_y = torch.exp(log_sigma_y)
                     X_ = X_batch @ A
                     Kx = ku.gaussianKernel(X_, X_, 1)
                     Ky = ku.gaussianKernel(Y_batch, Y_batch, sigma_y)
-                
                 
                 mi = -1 * dime_normalized(Kx, Ky, alpha=self.alpha, n_iters=self.dime_perm, seed=seed)
                 mi.backward()
@@ -110,11 +138,17 @@ class IndpTest_DIME():
                 seed += 1
             if verbose and i % 10 == 0:
                 print('Iteration: {}, DiME: {}'.format(i, -1 * mi.item()))
-        if self.isotropic:
+                print(sigma_x_diag_vals)
+        if self.type_bandwidth == 'isotropic':
             sigma_x = torch.exp(log_sigma_x)
             sigma_y = torch.exp(log_sigma_y)
             self.sigma_x = sigma_x.detach().item()
             self.sigma_y = sigma_y.detach().item()
+        elif self.type_bandwidth == 'diagonal':
+            sigma_x_diag_vals = torch.exp(log_sigma_x_diag_vals)
+            sigma_y_diag_vals = torch.exp(log_sigma_y_diag_vals)
+            self.sigma_x_diag_vals = sigma_x_diag_vals.detach()
+            self.sigma_y_diag_vals = sigma_y_diag_vals.detach()
         else:
             self.A = A.detach()
             sigma_y = torch.exp(log_sigma_y)
@@ -181,9 +215,14 @@ class IndpTest_DIME():
 
     def forward(self, X, Y, seed = None):
         with torch.no_grad():
-            if self.isotropic:
+            if self.type_bandwidth == 'isotropic':
                 Kx = ku.gaussianKernel(X,X, self.sigma_x)
                 Ky = ku.gaussianKernel(Y,Y, self.sigma_y)
+            elif self.type_bandwidth == 'diagonal':
+                X_weighted = X/self.sigma_x_diag_vals
+                Y_weighted = Y/self.sigma_y_diag_vals
+                Kx = ku.gaussianKernel(X_weighted, X_weighted, 1)
+                Ky = ku.gaussianKernel(Y_weighted, Y_weighted, 1)
             else:
                 X_ = X @ self.A # metric transformation (Changing the scale in different dimensions)
                 Kx = ku.gaussianKernel(X_,X_,1) # sigma is one because we have already performed the metric transformation
@@ -192,9 +231,14 @@ class IndpTest_DIME():
         return mi
     def forward_normalized(self, X, Y, seed = None):
         with torch.no_grad():
-            if self.isotropic:
+            if self.type_bandwidth == 'isotropic':
                 Kx = ku.gaussianKernel(X,X, self.sigma_x)
                 Ky = ku.gaussianKernel(Y,Y, self.sigma_y)
+            elif self.type_bandwidth == 'diagonal':
+                X_weighted = X/self.sigma_x_diag_vals
+                Y_weighted = Y/self.sigma_y_diag_vals
+                Kx = ku.gaussianKernel(X_weighted, X_weighted, 1)
+                Ky = ku.gaussianKernel(Y_weighted, Y_weighted, 1)
             else:
                 X_ = X @ self.A # metric transformation (Changing the scale in different dimensions)
                 Kx = ku.gaussianKernel(X_,X_,1) # sigma is one because we have already performed the metric transformation
@@ -203,9 +247,14 @@ class IndpTest_DIME():
         return mi
     def forward_mi(self, X, Y, seed = None):
         with torch.no_grad():
-            if self.isotropic:
+            if self.type_bandwidth == 'isotropic':
                 Kx = ku.gaussianKernel(X,X, self.sigma_x)
                 Ky = ku.gaussianKernel(Y,Y, self.sigma_y)
+            elif self.type_bandwidth == 'diagonal':
+                X_weighted = X/self.sigma_x_diag_vals
+                Y_weighted = Y/self.sigma_y_diag_vals
+                Kx = ku.gaussianKernel(X_weighted, X_weighted, 1)
+                Ky = ku.gaussianKernel(Y_weighted, Y_weighted, 1)
             else:
                 X_ = X @ self.A # metric transformation (Changing the scale in different dimensions)
                 Kx = ku.gaussianKernel(X_,X_,1) # sigma is one because we have already performed the metric transformation
@@ -284,7 +333,8 @@ def dime_normalized(Kx, Ky, alpha, n_iters=1, seed = None):
     H_perm_avg = torch.mean(H_perm)
     H_perm_std = torch.std(H_perm)
     dime_normalized = (H_perm_avg - H) / (H_perm_std + 1e-15)
-    
+    # if H_perm_std < 1e-8: # if the standard deviation is too small, return 0, causes numerical instability
+    #     dime_normalized *= 0
     return dime_normalized
 
 
