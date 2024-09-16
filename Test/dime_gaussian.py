@@ -71,7 +71,7 @@ class IndpTest_DIME():
         
         return results_all
 
-    def fit(self, X, Y, epochs = 200, lr = 0.01, batch_size = None, verbose = True): # changed learning rate
+    def fit(self, X, Y, epochs = 200, lr = 0.01, batch_size = None, verbose = False): 
         sigma_x, sigma_y = self.grid_search_init(X, Y)
         print('sigma_x: {}, sigma_y: {}'.format(sigma_x, sigma_y))
         if self.type_bandwidth == 'isotropic':
@@ -138,7 +138,7 @@ class IndpTest_DIME():
                 seed += 1
             if verbose and i % 10 == 0:
                 print('Iteration: {}, DiME: {}'.format(i, -1 * mi.item()))
-                print(sigma_x_diag_vals)
+                # print(sigma_x_diag_vals)
         if self.type_bandwidth == 'isotropic':
             sigma_x = torch.exp(log_sigma_x)
             sigma_y = torch.exp(log_sigma_y)
