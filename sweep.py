@@ -29,7 +29,7 @@ import cupyx.scipy
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-e', '--experiment-name', required=True, help='Experiment name for saved files', type=str)
-parser.add_argument('-dataset' '--dataset', required = False, default = 'isa', type = str)
+parser.add_argument('-dataset', '--dataset', required = False, default = 'isa', type = str)
 parser.add_argument('-dime_perm', '--dime_perm', required = False, default = 10, type = int)
 parser.add_argument('-epochs', '--epochs', required = False, default = 200, type = int)
 parser.add_argument('-lr', '--lr', required = False, default = 0.07, type = float)
