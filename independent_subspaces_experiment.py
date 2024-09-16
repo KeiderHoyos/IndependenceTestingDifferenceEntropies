@@ -88,7 +88,7 @@ def run():
     d = 4
     alphas = np.linspace(0,1,10)
     n_alphas = len(alphas)
-    n_tests = 9
+    n_tests = 11
     test_power = np.zeros([n_tests,n_alphas, test_num])
     
 
@@ -98,8 +98,8 @@ def run():
             X, Y =generate_ISA(n,d,sigma_normal,alpha, seed)
             X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
 
-                        # alpha = 1.0, von Neumann Entropies
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 1.0, isotropic = True,
+            # alpha = 1.0, von Neumann Entropies
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 1.0, type_bandwidth= 'isotropic',
                                             dime_perm = args.dime_perm , lr = args.lr,
                                             epochs = args.epochs, batch_size = args.batch_size,
                                             grid_search_min = args.grid_search_min,
@@ -107,7 +107,7 @@ def run():
             results_dime = dime_estimator.perform_test()
             test_power[0, i, j] = float(results_dime['h0_rejected'])
             
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 1.0, isotropic = False,
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 1.0,  type_bandwidth= 'diagonal',
                                             dime_perm = args.dime_perm , lr = args.lr,
                                             epochs = args.epochs, batch_size = args.batch_size,
                                             grid_search_min = args.grid_search_min,
@@ -116,7 +116,7 @@ def run():
             test_power[1, i, j] = float(results_dime['h0_rejected'])
 
             # alpha = 2.0, Rényi Entropies
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 2.0, isotropic = True,
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 2.0, type_bandwidth= 'isotropic',
                                             dime_perm = args.dime_perm , lr = args.lr,
                                             epochs = args.epochs, batch_size = args.batch_size,
                                             grid_search_min = args.grid_search_min,
@@ -124,7 +124,7 @@ def run():
             results_dime = dime_estimator.perform_test()
             test_power[2, i, j] = float(results_dime['h0_rejected'])
             
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 2.0, isotropic = False, 
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 2.0, type_bandwidth= 'diagonal', 
                                             dime_perm = args.dime_perm , lr = args.lr,
                                             epochs = args.epochs, batch_size = args.batch_size,
                                             grid_search_min = args.grid_search_min,
@@ -133,7 +133,7 @@ def run():
             test_power[3, i, j] = float(results_dime['h0_rejected'])
 
             # alpha = 0.5, Rényi Entropies    
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor,  alpha = 0.5, isotropic = True,
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor,  alpha = 0.5, type_bandwidth= 'isotropic',
                                             dime_perm = args.dime_perm , lr = args.lr,
                                             epochs = args.epochs, batch_size = args.batch_size,
                                             grid_search_min = args.grid_search_min,
@@ -141,7 +141,7 @@ def run():
             results_dime = dime_estimator.perform_test()
             test_power[4, i, j] = float(results_dime['h0_rejected'])
         
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 0.5, isotropic = False,
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 0.5, type_bandwidth= 'diagonal',
                                             dime_perm = args.dime_perm , lr = args.lr,
                                             epochs = args.epochs, batch_size = args.batch_size,
                                             grid_search_min = args.grid_search_min,
@@ -149,18 +149,36 @@ def run():
             results_dime = dime_estimator.perform_test()
             test_power[5, i, j] = float(results_dime['h0_rejected'])
 
+            # alpha = 0.125, Rényi Entropies    
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor,  alpha = 0.125,  type_bandwidth= 'isotropic',
+                                            dime_perm = args.dime_perm , lr = args.lr,
+                                            epochs = args.epochs, batch_size = args.batch_size,
+                                            grid_search_min = args.grid_search_min,
+                                            grid_search_max = args.grid_search_max)
+            results_dime = dime_estimator.perform_test()
+            test_power[6, i, j] = float(results_dime['h0_rejected'])
+        
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 0.125,  type_bandwidth= 'diagonal',
+                                            dime_perm = args.dime_perm , lr = args.lr,
+                                            epochs = args.epochs, batch_size = args.batch_size,
+                                            grid_search_min = args.grid_search_min,
+                                            grid_search_max = args.grid_search_max)
+            results_dime = dime_estimator.perform_test()
+            test_power[7, i, j] = float(results_dime['h0_rejected'])
+
             # HSIC tests
             hsic0 = IndpTest_naive(X_tensor, Y_tensor, alpha=0.05, n_permutation=100, kernel_type="Gaussian", null_gamma = True)
             results_all0 = hsic0.perform_test()
-            test_power[6, i, j] = float(results_all0['h0_rejected'])
+            test_power[8, i, j] = float(results_all0['h0_rejected'])
 
             hsic1 = IndpTest_LKGaussian(X_tensor, Y_tensor, device, alpha=0.05, n_permutation=100, null_gamma = True, split_ratio = 0.5)
             results_all1 = hsic1.perform_test(debug = -1, if_grid_search = True)
-            test_power[7, i, j] = float(results_all1['h0_rejected'])
+            test_power[9, i, j] = float(results_all1['h0_rejected'])
 
             hsic2 = IndpTest_LKWeightGaussian(X_tensor, Y_tensor, device, alpha=0.05, n_permutation=100, null_gamma = True, split_ratio = 0.5)
             results_all2 = hsic2.perform_test(debug = -1, if_grid_search = True)
-            test_power[8, i, j] = float(results_all2['h0_rejected'])
+            test_power[10, i, j] = float(results_all2['h0_rejected'])
+
 
             if args.parallel:
                 seed += repetitions
