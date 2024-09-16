@@ -29,6 +29,7 @@ import cupyx.scipy
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-e', '--experiment-name', required=True, help='Experiment name for saved files', type=str)
+parser.add_argument('-dataset' '--dataset', required = False, default = 'isa', type = str)
 parser.add_argument('-dime_perm', '--dime_perm', required = False, default = 10, type = int)
 parser.add_argument('-epochs', '--epochs', required = False, default = 200, type = int)
 parser.add_argument('-lr', '--lr', required = False, default = 0.07, type = float)
@@ -72,6 +73,44 @@ def generate_ISA(n,d,sigma_normal,alpha, seed = 0):
     Y = (m_y@Y_con.T).T
     
     return X,Y
+def Sinusoid(x, y, w):
+    return 1 + np.sin(w*x)*np.sin(w*y)
+
+def Sinusoid_Generator(n,w, seed = 0):
+    np.random.seed(seed)
+    i = 0
+    output = np.zeros([n,2])
+    while i < n:
+        U = np.random.rand(1)
+        V = np.random.rand(2)
+        x0 = -np.pi + V[0]*2*np.pi
+        x1 = -np.pi + V[1]*2*np.pi
+        if U < 1/2 * Sinusoid(x0,x1,w):
+            output[i, 0] = x0
+            output[i, 1] = x1
+            i = i + 1
+    X = output[:,0:1]
+    Y = output[:,1:]
+    return X,Y
+
+def sinedependence(n,d,seed = 0):
+    np.random.seed(seed)
+    mean = np.zeros(d)
+    cov = np.eye(d)
+    X = np.random.multivariate_normal(mean, cov, n)
+    Z = np.random.randn(n)
+    Y = 20*np.sin(4*np.pi*(X[:,0]**2 + X[:,1]**2))+Z 
+    return X,Y
+
+def GSign(n,d, seed):
+    np.random.seed(seed)
+    mean = np.zeros(d)
+    cov = np.eye(d)
+    X = np.random.multivariate_normal(mean, cov, n)
+    sign_X = np.sign(X)
+    Z = np.random.randn(n)
+    Y = np.abs(Z)*np.prod(sign_X,1)
+    return X,Y
 
 def run():
     repetitions = 50
@@ -79,23 +118,42 @@ def run():
     seed = 0 
     device = torch.device('cuda')
     test_power = np.zeros([test_num])
-    n = 128
-    d = 4
-    sigma_normal = 0.1
-    alpha = 0.6666 
+
+
+
     
     for j in range(test_num):
-        print('sample size:', n, 'repetition: ', j)
+        if args.dataset == 'isa':
+            n = 128
+            d = 4
+            sigma_normal = 0.1
+            alpha = 0.6666 
+            X, Y =  generate_ISA(n,d,sigma_normal,alpha, seed = seed)
+        elif args.dataset == 'sinusoid':
+            w = 3
+            n = 500
+            X, Y = Sinusoid_Generator(n, w, seed)
+            Y = Y.reshape(-1,1)
+        elif args.dataset == 'sine':
+            d = 3
+            n = 900
+            X, Y = sinedependence(n, d, seed)
+            Y = Y.reshape(-1,1)
+        elif args.dataset == 'gsign':
+            d = 4
+            n = 600
+            X, Y =  GSign(n,d, seed)
+            Y = Y.reshape(-1,1)
+        else:
+            raise ValueError("Invalid dataset")
 
-        X, Y =  generate_ISA(n,d,sigma_normal,alpha, seed = seed)
-        print(Y.shape)
         # Y = Y.reshape(-1,1)
         X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
 
         # alpha = 1.0, von Neumann Entropies
 
         dime_estimator = IndpTest_DIME( X_tensor, Y_tensor ,
-                                        alpha = 1.0, isotropic = False, 
+                                        alpha = 1.0, type_bandwidth= 'diagonal', 
                                         dime_perm = args.dime_perm , lr = args.lr,
                                         epochs = args.epochs, batch_size = args.batch_size,
                                         grid_search_min = args.grid_search_min,
