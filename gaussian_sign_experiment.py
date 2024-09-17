@@ -31,10 +31,10 @@ parser.add_argument('-rId', '--repId',required=False, default= 1, help = 'repeti
 parser.add_argument('-datafolder', '--DATAFOLDER', required = True, type = str )
 parser.add_argument('-parallel', '--parallel', required = False, default = False, type = bool)
 parser.add_argument('-dime_perm', '--dime_perm', required = False, default = 10, type = int)
-parser.add_argument('-epochs', '--epochs', required = False, default = 250, type = int)
-parser.add_argument('-lr', '--lr', required = False, default = 0.01, type = float)
+parser.add_argument('-epochs', '--epochs', required = False, default = 100, type = int)
+parser.add_argument('-lr', '--lr', required = False, default = 0.003, type = float)
 parser.add_argument('-batch_size', '--batch_size', required = False, default = None, type = int)
-parser.add_argument('-grid_search_min', '--grid_search_min', required = False, default = -1, type = int)
+parser.add_argument('-grid_search_min', '--grid_search_min', required = False, default = 0, type = int)
 parser.add_argument('-grid_search_max', '--grid_search_max', required = False, default = 4, type = int)
 
 args = parser.parse_args()
