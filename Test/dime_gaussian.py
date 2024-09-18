@@ -235,7 +235,7 @@ class IndpTest_DIME():
 
                 Kx = ku.gaussianKernel(X,X, sigma_x)
                 Ky = ku.gaussianKernel(Y,Y, sigma_y)
-                mi = dime_normalized(Kx,Ky,alpha=self.alpha, n_iters=self.dime_perm, seed = 0) # 2 times to have a good estimate of DiME 
+                mi = dime_normalized(Kx,Ky,alpha=self.alpha, n_iters=self.dime_perm, seed = 0) 
                 dime_pair.append(mi.item())
                 sigma_pair.append((sigma_x.item(), sigma_y.item()))
 
