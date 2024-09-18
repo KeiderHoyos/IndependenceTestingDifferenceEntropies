@@ -11,13 +11,16 @@ import torch.nn as nn
 import torch.distributions as dist
 import copy
 from matplotlib import pyplot as plt
+from Test.kernels import rbf_kernel, kernel_midwidth_rbf, rbf_kernel_weight
 
 class IndpTest_DIME():
     def __init__(self, X,Y, dime_perm, 
                  alpha = 1.0, type_bandwidth = 'diagonal', 
                  epochs = 200, lr = 0.01,  split_ratio = 0.5, 
                  batch_size = None, 
-                 grid_search_min = -1, grid_search_max = 3):
+                 grid_search_min = -1, grid_search_max = 3, 
+                 optimizer = 'adam', 
+                 scheduler = False):
         """
         X: numpy array of shape (n_samples, n_features)
         Y: numpy array of shape (n_samples, n_features)
@@ -31,7 +34,7 @@ class IndpTest_DIME():
         grid_search_min: minimum value of the grid search
         grid_search_max: maximum value of the grid search
         """
-        assert type_bandwidth in ['isotropic', 'diagonal', 'anisotropic'], f"Invalid type_bandwidth: {type_bandwidth}"
+        assert type_bandwidth in ['isotropic', 'diagonal', 'anisotropic', 'weighted'], f"Invalid type_bandwidth: {type_bandwidth}"
         self.X = X
         self.Y = Y
         self.dime_perm = dime_perm
@@ -43,12 +46,17 @@ class IndpTest_DIME():
         self.batch_size = batch_size
         self.grid_search_min = grid_search_min
         self.grid_search_max = grid_search_max
+        self.optimizer = optimizer
+        self.scheduler = scheduler
     def perform_test(self, significance = 0.05, permutations = 100, seed = 0): # SEED = 0
         ### split the datasets ###
         Xtr, Ytr, Xte, Yte = self.split_samples()
         dime_null = []
-        self.fit(Xtr, Ytr, epochs = self.epochs, lr = self.lr, batch_size=self.batch_size)
-        dime = self.forward_normalized(Xte,Yte, seed = seed)
+        self.fit(Xtr, Ytr, epochs = self.epochs, lr = self.lr, batch_size=self.batch_size, optimizer=self.optimizer, scheduler=self.scheduler)
+        # dime = self.forward_normalized(Xte,Yte, seed = seed)
+        # dime = self.forward(Xte,Yte, seed = seed)
+        Hxy = self.forward_joint_entropy(Xte, Yte)
+        Hxy_null = []
 
         # Set a different seed for permutations
         perm_seed = seed 
@@ -56,9 +64,16 @@ class IndpTest_DIME():
             torch.manual_seed(perm_seed)
             idx_perm = torch.randperm(Xte.shape[0])
             X_perm = Xte[idx_perm, :]
-            dime_null.append(self.forward_normalized(X_perm, Yte, seed = seed))
+            # Y_perm = Yte[idx_perm, :]
+            # dime_null.append(self.forward_normalized(Xte, Y_perm, seed = seed))
+            # dime_null.append(self.forward_normalized(X_perm, Yte, seed = seed))
+            # dime_null.append(self.forward(X_perm, Yte, seed = seed))
+            Hxy_null.append(self.forward_joint_entropy(X_perm, Yte))
             perm_seed += 1 
-        dime_null = torch.tensor(dime_null)
+        # dime_null = torch.tensor(dime_null)
+        Hxy_null = torch.tensor(Hxy_null)
+        dime_null =  Hxy_null.mean() - Hxy_null
+        dime = Hxy_null.mean() - Hxy
         plt.hist(dime_null.cpu().numpy(), bins = 20)
         thr_dime = torch.quantile(dime_null, (1 - significance))
         
@@ -71,7 +86,7 @@ class IndpTest_DIME():
         
         return results_all
 
-    def fit(self, X, Y, epochs = 200, lr = 0.01, batch_size = None, verbose = False): 
+    def fit(self, X, Y, epochs = 200, lr = 0.01, batch_size = None, verbose = True, optimizer = 'adam', scheduler = False): 
         sigma_x, sigma_y = self.grid_search_init(X, Y)
         print('sigma_x: {}, sigma_y: {}'.format(sigma_x, sigma_y))
         if self.type_bandwidth == 'isotropic':
@@ -79,7 +94,8 @@ class IndpTest_DIME():
             sigma_y = torch.tensor(sigma_y, device = X.device)
             log_sigma_x = torch.log(sigma_x).clone().detach().requires_grad_(True)
             log_sigma_y = torch.log(sigma_y).clone().detach().requires_grad_(True)
-            optimizer = torch.optim.Adam([log_sigma_x, log_sigma_y], lr=lr)
+            # optimizer = torch.optim.Adam([log_sigma_x, log_sigma_y], lr=lr)
+            params = [log_sigma_x, log_sigma_y]
         elif self.type_bandwidth == 'diagonal':
             sigma_x = torch.tensor(sigma_x, device = X.device)
             sigma_y = torch.tensor(sigma_y, device = X.device)
@@ -87,15 +103,39 @@ class IndpTest_DIME():
             sigma_y_diag_vals = torch.ones(Y.shape[1], device=Y.device, dtype=Y.dtype)*sigma_y
             log_sigma_x_diag_vals = torch.log(sigma_x_diag_vals).clone().detach().requires_grad_(True)
             log_sigma_y_diag_vals = torch.log(sigma_y_diag_vals).clone().detach().requires_grad_(True)
-            optimizer = torch.optim.Adam([log_sigma_x_diag_vals, log_sigma_y_diag_vals], lr=lr)
-        else:
+            # optimizer = torch.optim.Adam([log_sigma_x_diag_vals, log_sigma_y_diag_vals], lr=lr)
+            params = [log_sigma_x_diag_vals, log_sigma_y_diag_vals]
+        elif self.type_bandwidth == 'anisotropic':
             sigma_x = sigma_x*torch.eye(X.shape[1], device=X.device, dtype=X.dtype)
             A = sigma_x.inverse().clone().detach().requires_grad_(True) # matrix to perform metric transformation 
             sigma_y = torch.tensor(sigma_y, device = X.device)
             log_sigma_y = torch.log(sigma_y).clone().detach().requires_grad_(True)
-            optimizer = torch.optim.Adam([A, log_sigma_y], lr=lr)
+            # optimizer = torch.optim.Adam([A, log_sigma_y], lr=lr)
+            params = [A, log_sigma_y]
+        elif self.type_bandwidth == 'weighted':
+            sigma_x = torch.tensor(sigma_x, device = X.device)
+            sigma_y = torch.tensor(sigma_y, device = X.device)
+            log_sigma_x = torch.log(sigma_x).clone().detach().requires_grad_(True)
+            log_sigma_y = torch.log(sigma_y).clone().detach().requires_grad_(True)
+            attx_init = [0.0] * X.shape[1]
+            atty_init = [0.0] * Y.shape[1]
+            att_x = torch.tensor([attx_init],requires_grad=True, device = X.device)
+            att_y = torch.tensor([atty_init],requires_grad=True, device = Y.device)
+            params = [att_x, att_y, log_sigma_x, log_sigma_y]
+        else:
+            raise ValueError("Unsupported type_bandwidth")
+
+        if optimizer == 'adam':
+            optimizer = torch.optim.Adam(params, lr=lr)
+        elif optimizer == 'sgd':
+            optimizer = torch.optim.SGD(params, lr=lr, momentum=0.2)
+        else:
+            raise ValueError("Unsupported optimizer type: {}".format(optimizer))
         seed = 0
         # set seed
+        # Initialize the cosine annealing scheduler with a minimum learning rate
+        if scheduler:
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min = 0.1*lr)
         torch.manual_seed(seed)
         torch.cuda.manual_seed(seed)
         n_samples = X.shape[0]
@@ -126,19 +166,29 @@ class IndpTest_DIME():
                     Y_weighted = Y_batch/sigma_y_diag_vals
                     Kx = ku.gaussianKernel(X_weighted, X_weighted, 1)
                     Ky = ku.gaussianKernel(Y_weighted, Y_weighted, 1)
-                else:
+                elif self.type_bandwidth == 'anisotropic':
                     sigma_y = torch.exp(log_sigma_y)
                     X_ = X_batch @ A
                     Kx = ku.gaussianKernel(X_, X_, 1)
                     Ky = ku.gaussianKernel(Y_batch, Y_batch, sigma_y)
+                else:
+                    sigma_x = torch.exp(log_sigma_x)
+                    sigma_y = torch.exp(log_sigma_y)
+                    weight_x = torch.sigmoid(att_x)
+                    weight_y = torch.sigmoid(att_y)
+                    Kx, Ky = self.cal_weight_kernels(X_batch, Y_batch, sigma_x, sigma_y, weight_x, weight_y)
                 
-                mi = -1 * dime_normalized(Kx, Ky, alpha=self.alpha, n_iters=self.dime_perm, seed=seed)
+                # mi = -1 * dime_normalized(Kx, Ky, alpha=self.alpha, n_iters=self.dime_perm, seed=seed)
+                mi = -1 * dime(Kx, Ky, alpha=self.alpha, n_iters=self.dime_perm, seed=seed)
                 mi.backward()
                 optimizer.step()
                 seed += 1
+            if scheduler:
+                scheduler.step()
             if verbose and i % 10 == 0:
                 print('Iteration: {}, DiME: {}'.format(i, -1 * mi.item()))
                 # print(sigma_x_diag_vals)
+                print(weight_x, weight_y, sigma_x, sigma_y)
         if self.type_bandwidth == 'isotropic':
             sigma_x = torch.exp(log_sigma_x)
             sigma_y = torch.exp(log_sigma_y)
@@ -149,10 +199,17 @@ class IndpTest_DIME():
             sigma_y_diag_vals = torch.exp(log_sigma_y_diag_vals)
             self.sigma_x_diag_vals = sigma_x_diag_vals.detach()
             self.sigma_y_diag_vals = sigma_y_diag_vals.detach()
-        else:
+        elif self.type_bandwidth == 'anisotropic':
             self.A = A.detach()
             sigma_y = torch.exp(log_sigma_y)
             self.sigma_y = sigma_y.detach().item()
+        else:
+            sigma_x = torch.exp(log_sigma_x)
+            sigma_y = torch.exp(log_sigma_y)
+            self.sigma_x = sigma_x.detach().item()
+            self.sigma_y = sigma_y.detach().item()
+            self.att_x = att_x.detach()
+            self.att_y = att_y.detach()
     def grid_search_init(self, X, Y):
         """
         Using grid_search to init the widths (similar to HSIC)
@@ -178,7 +235,7 @@ class IndpTest_DIME():
 
                 Kx = ku.gaussianKernel(X,X, sigma_x)
                 Ky = ku.gaussianKernel(Y,Y, sigma_y)
-                mi = dime_normalized(Kx,Ky,alpha=self.alpha, n_iters=2*self.dime_perm, seed = 0) # 2 times to have a good estimate of DiME 
+                mi = dime_normalized(Kx,Ky,alpha=self.alpha, n_iters=self.dime_perm, seed = 0) # 2 times to have a good estimate of DiME 
                 dime_pair.append(mi.item())
                 sigma_pair.append((sigma_x.item(), sigma_y.item()))
 
@@ -223,13 +280,18 @@ class IndpTest_DIME():
                 Y_weighted = Y/self.sigma_y_diag_vals
                 Kx = ku.gaussianKernel(X_weighted, X_weighted, 1)
                 Ky = ku.gaussianKernel(Y_weighted, Y_weighted, 1)
-            else:
+            elif self.type_bandwidth == 'anisotropic':
                 X_ = X @ self.A # metric transformation (Changing the scale in different dimensions)
                 Kx = ku.gaussianKernel(X_,X_,1) # sigma is one because we have already performed the metric transformation
                 Ky = ku.gaussianKernel(Y,Y,self.sigma_y)
+            else:
+                weight_x = torch.sigmoid(self.att_x)
+                weight_y = torch.sigmoid(self.att_y)
+                Kx, Ky = self.cal_weight_kernels(X, Y, self.sigma_x, self.sigma_y, weight_x, weight_y)
             mi = dime(Kx,Ky, alpha=self.alpha, n_iters=self.dime_perm, seed = seed)
+            
         return mi
-    def forward_normalized(self, X, Y, seed = None):
+    def forward_normalized(self, X, Y, seed = None, cap = False):
         with torch.no_grad():
             if self.type_bandwidth == 'isotropic':
                 Kx = ku.gaussianKernel(X,X, self.sigma_x)
@@ -239,12 +301,36 @@ class IndpTest_DIME():
                 Y_weighted = Y/self.sigma_y_diag_vals
                 Kx = ku.gaussianKernel(X_weighted, X_weighted, 1)
                 Ky = ku.gaussianKernel(Y_weighted, Y_weighted, 1)
-            else:
+            elif self.type_bandwidth == 'anisotropic':
                 X_ = X @ self.A # metric transformation (Changing the scale in different dimensions)
                 Kx = ku.gaussianKernel(X_,X_,1) # sigma is one because we have already performed the metric transformation
                 Ky = ku.gaussianKernel(Y,Y,self.sigma_y)
+            else:
+                weight_x = torch.sigmoid(self.att_x)
+                weight_y = torch.sigmoid(self.att_y)
+                Kx, Ky = self.cal_weight_kernels(X, Y, self.sigma_x, self.sigma_y, weight_x, weight_y)
             mi = dime_normalized(Kx,Ky, alpha=self.alpha, n_iters=self.dime_perm, seed = seed)
         return mi
+    def forward_joint_entropy(self, X, Y):
+        with torch.no_grad():
+            if self.type_bandwidth == 'isotropic':
+                Kx = ku.gaussianKernel(X,X, self.sigma_x)
+                Ky = ku.gaussianKernel(Y,Y, self.sigma_y)
+            elif self.type_bandwidth == 'diagonal':
+                X_weighted = X/self.sigma_x_diag_vals
+                Y_weighted = Y/self.sigma_y_diag_vals
+                Kx = ku.gaussianKernel(X_weighted, X_weighted, 1)
+                Ky = ku.gaussianKernel(Y_weighted, Y_weighted, 1)
+            elif self.type_bandwidth == 'anisotropic':
+                X_ = X @ self.A # metric transformation (Changing the scale in different dimensions)
+                Kx = ku.gaussianKernel(X_,X_,1) # sigma is one because we have already performed the metric transformation
+                Ky = ku.gaussianKernel(Y,Y,self.sigma_y)
+            else:
+                weight_x = torch.sigmoid(self.att_x)
+                weight_y = torch.sigmoid(self.att_y)
+                Kx, Ky = self.cal_weight_kernels(X, Y, self.sigma_x, self.sigma_y, weight_x, weight_y)
+            Hxy = joint_entropy(Kx,Ky, alpha=self.alpha)
+        return Hxy
     def forward_mi(self, X, Y, seed = None):
         with torch.no_grad():
             if self.type_bandwidth == 'isotropic':
@@ -255,14 +341,37 @@ class IndpTest_DIME():
                 Y_weighted = Y/self.sigma_y_diag_vals
                 Kx = ku.gaussianKernel(X_weighted, X_weighted, 1)
                 Ky = ku.gaussianKernel(Y_weighted, Y_weighted, 1)
-            else:
+            elif self.type_bandwidth == 'anisotropic':
                 X_ = X @ self.A # metric transformation (Changing the scale in different dimensions)
                 Kx = ku.gaussianKernel(X_,X_,1) # sigma is one because we have already performed the metric transformation
                 Ky = ku.gaussianKernel(Y,Y,self.sigma_y)
+            else:
+                weight_x = torch.sigmoid(self.att_x)
+                weight_y = torch.sigmoid(self.att_y)
+                Kx, Ky = self.cal_weight_kernels(X, Y, self.sigma_x, self.sigma_y, weight_x, weight_y)
             mi = mutual_information(Kx, Ky, alpha=self.alpha)
         return mi
 
+    def cal_weight_kernels(self, X, Y, kernel_width_x, kernel_width_y, weight_x, weight_y):
+        """
+        Calculate (weighted rbf) kernels
+        """
+        K = rbf_kernel_weight(X, X, kernel_width_x, weight_x)
+        L = rbf_kernel_weight(Y, Y, kernel_width_y, weight_y)
+        
+        return K, L
     
+    def midwidth_rbf(self, X, Y):
+        """
+        Calculate midwidth of Gaussian kernels 
+        (also return maxwidth that can be used to limit the range in learning kernels)
+        
+        Return 
+        wx_mid, wy_mid, wx_max, wy_max
+        """
+        wx_mid, wy_mid, wx_max, wy_max = kernel_midwidth_rbf(X, Y)
+        
+        return wx_mid, wy_mid, wx_max, wy_max    
 
 import torch
 import repitl.matrix_itl as itl
@@ -306,7 +415,7 @@ def dime(Kx, Ky, alpha, n_iters=1, shouldReturnComponents = False, seed = None):
     
     return H_perm_avg - H
 
-def dime_normalized(Kx, Ky, alpha, n_iters=1, seed = None):
+def dime_normalized(Kx, Ky, alpha, n_iters=1, seed = None, cap = False):
     """
     Computes the difference of entropy equation of the following form. Let P be a random permutation matrix
     
@@ -333,12 +442,22 @@ def dime_normalized(Kx, Ky, alpha, n_iters=1, seed = None):
     H_perm_avg = torch.mean(H_perm)
     H_perm_std = torch.std(H_perm)
     dime_normalized = (H_perm_avg - H) / (H_perm_std + 1e-15)
-    # if H_perm_std < 1e-8: # if the standard deviation is too small, return 0, causes numerical instability
-    #     dime_normalized *= 0
+    if cap and dime_normalized > 100: # re run with a different seed if the value is too high (this implies low variance, usually a bad permutation)
+        seed += 1 if seed is not None else None
+        dime_normalized = dime(Kx, Ky, alpha, n_iters=n_iters, seed = seed)
     return dime_normalized
 
 
-
+def joint_entropy(Kx, Ky, alpha):
+    """
+    Computes the joint entropy of two kernels
+    """
+    if alpha != 1:
+        H = itl.matrixAlphaJointEntropy([Kx, Ky], alpha=alpha)
+    else:
+        H = vonNeumannEntropy(Kx*Ky)
+    
+    return H
 
 def dime_max(Kx, Ky, alpha, n_iters=1, shouldReturnComponents = False, seed = None):
     """

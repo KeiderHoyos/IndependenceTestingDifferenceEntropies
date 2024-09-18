@@ -36,6 +36,7 @@ parser.add_argument('-lr', '--lr', required = False, default = 0.07, type = floa
 parser.add_argument('-batch_size', '--batch_size', required = False, default = None, type = int)
 parser.add_argument('-grid_search_min', '--grid_search_min', required = False, default = -2, type = int)
 parser.add_argument('-grid_search_max', '--grid_search_max', required = False, default = 4, type = int)
+parser.add_argument('-scheduler', '--scheduler', required = False, default = 'False', type = str)
 
 args = parser.parse_args()
 
@@ -119,7 +120,10 @@ def run():
     device = torch.device('cuda')
     test_power = np.zeros([test_num])
 
-
+    if args.scheduler == 'True':
+        args.scheduler = True
+    else:   
+        args.scheduler = False
 
     
     for j in range(test_num):
@@ -151,13 +155,13 @@ def run():
         X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
 
         # alpha = 1.0, von Neumann Entropies
-
-        dime_estimator = IndpTest_DIME( X_tensor, Y_tensor ,
-                                        alpha = 1.0, type_bandwidth= 'diagonal', 
-                                        dime_perm = args.dime_perm , lr = args.lr,
-                                        epochs = args.epochs, batch_size = args.batch_size,
+        dime_estimator = IndpTest_DIME(X_tensor, Y_tensor, 
+                                        alpha = 1.0, type_bandwidth = "weighted", 
+                                        dime_perm= args.dime_perm, lr = args.lr, 
                                         grid_search_min = args.grid_search_min,
-                                        grid_search_max = args.grid_search_max)
+                                        grid_search_max = args.grid_search_max, 
+                                        epochs=args.epochs, scheduler=args.scheduler)
+        
         results_dime = dime_estimator.perform_test()
         test_power[j] = float(results_dime['h0_rejected'])
 
