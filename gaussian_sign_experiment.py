@@ -59,7 +59,7 @@ def run():
     else:
         test_num = repetitions
         seed = 0 
-    device = torch.device('cuda')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     d = 4
 
     sample_sizes = (400, 500,600,700)
