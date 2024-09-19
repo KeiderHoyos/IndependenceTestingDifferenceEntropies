@@ -39,6 +39,7 @@ parser.add_argument('-lr', '--lr', required = False, default = 0.05, type = floa
 parser.add_argument('-batch_size', '--batch_size', required = False, default = None, type = int)
 parser.add_argument('-grid_search_min', '--grid_search_min', required = False, default = -3, type = int)
 parser.add_argument('-grid_search_max', '--grid_search_max', required = False, default = 3, type = int)
+parser.add_argument('-type1_error', '--type1_error', required = False, default = False, type = bool)
 
 args = parser.parse_args()
 
@@ -138,6 +139,10 @@ def run():
             Y = Y.reshape(-1,1)
             Y = Y.astype(np.float32)
             X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
+
+            if args.type1_error:
+               # permute y samples
+                Y_tensor = torch.randperm(Y_tensor.size(0)).to(device).float().view(-1,1)
 
             # alpha = 1.0, von Neumann Entropies
             dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 1.0, type_bandwidth= 'isotropic',
