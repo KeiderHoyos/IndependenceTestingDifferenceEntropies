@@ -26,7 +26,7 @@ class IndpTest_LKWeightGaussian(IndpTest):
 
     """
 
-    def __init__(self, X, Y, device, alpha=0.05, n_permutation=100, null_gamma = True, split_ratio = 0.5):
+    def __init__(self, X, Y, device, alpha=0.05, n_permutation=100, null_gamma = True, split_ratio = 0.5, iter_steps = 100):
         """
         alpha: significance level 
         n_permutation: The number of times to simulate from the null distribution
@@ -38,6 +38,7 @@ class IndpTest_LKWeightGaussian(IndpTest):
         self.null_gamma = null_gamma
         self.split_ratio = split_ratio
         self.device = device
+        self.iter_steps = iter_steps
     
     def split_samples(self):
         """
@@ -85,7 +86,12 @@ class IndpTest_LKWeightGaussian(IndpTest):
         Xtr = Xtr.to(self.device)    
         Ytr = Ytr.to(self.device)
         
-        wx, wy, weight_x, weight_y, _ = self.search_width_weight(Xtr, Ytr, wx_init/2.0, wy_init/2.0, debug = debug) 
+        wx, wy, weight_x, weight_y, _ = self.search_width_weight(Xtr, Ytr, wx_init/2.0, wy_init/2.0, debug = debug , iter_steps = self.iter_steps) 
+        # save weights
+        self.weight_x = weight_x
+        self.weight_y = weight_y
+        self.wx = wx
+        self.wy = wy
         
         if self.null_gamma == True:
             if self.device.type == "cuda":
@@ -344,7 +350,7 @@ class IndpTest_LKWeightGaussian(IndpTest):
             Kc = K - torch.mean(K,0)
             Lc = L - torch.mean(L,1)
             s_p = self.compute_stat(K, L, Kc, Lc)
-            ind.append(s_p)
+            ind.append(s_p.cpu()) ## added .cpu()
         sort_statistic = np.sort(ind)
         ls = len(sort_statistic)
         thresh_p = sort_statistic[int((1-self.alpha)*ls)+1]

@@ -200,12 +200,12 @@ def run():
             results_all0 = hsic0.perform_test()
             test_power[6, i, j] = float(results_all0['h0_rejected'])
 
-            hsic1 = IndpTest_LKGaussian(X_tensor, Y_tensor, device, alpha=0.05, n_permutation=100, null_gamma = True, split_ratio = 0.5)
-            results_all1 = hsic1.perform_test(debug = -1, if_grid_search = True)
+            hsic1 = IndpTest_LKGaussian(X_tensor, Y_tensor, device, alpha=0.05, n_permutation=100, null_gamma = True, split_ratio = 0.5, iter_steps = 300) # 300 steps for fair comparison
+            results_all1 = hsic1.perform_test(debug = -1, if_grid_search = False)
             test_power[7, i, j] = float(results_all1['h0_rejected'])
 
-            hsic2 = IndpTest_LKWeightGaussian(X_tensor, Y_tensor, device, alpha=0.05, n_permutation=100, null_gamma = True, split_ratio = 0.5)
-            results_all2 = hsic2.perform_test(debug = -1, if_grid_search = True)
+            hsic2 = IndpTest_LKWeightGaussian(X_tensor, Y_tensor, device, alpha=0.05, n_permutation=100, null_gamma = True, split_ratio = 0.5, iter_steps = 300)
+            results_all2 = hsic2.perform_test(debug = -1, if_grid_search = False) # necessary for this dataset according to the original paper
             test_power[8, i, j] = float(results_all2['h0_rejected'])
 
 
