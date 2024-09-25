@@ -30,7 +30,7 @@ class IndpTest_LKGaussian(IndpTest):
 
     """
 
-    def __init__(self, X, Y, device, alpha=0.05, n_permutation=100, null_gamma = True, split_ratio = 0.5):
+    def __init__(self, X, Y, device, alpha=0.05, n_permutation=100, null_gamma = True, split_ratio = 0.5,  iter_steps = 100):
         """
         alpha: significance level 
         n_permutation: The number of times to simulate from the null distribution
@@ -42,6 +42,7 @@ class IndpTest_LKGaussian(IndpTest):
         self.null_gamma = null_gamma
         self.split_ratio = split_ratio
         self.device = device
+        self.iter_steps = iter_steps
     
     def split_samples(self):
         """
@@ -88,7 +89,7 @@ class IndpTest_LKGaussian(IndpTest):
         Xtr = Xtr.to(self.device)    
         Ytr = Ytr.to(self.device)
         
-        wx, wy, path = self.search_width(Xtr, Ytr, wx_init, wy_init, wx_max, wy_max, debug = debug, limit_max = False) 
+        wx, wy, path = self.search_width(Xtr, Ytr, wx_init, wy_init, wx_max, wy_max, debug = debug, limit_max = False, iter_steps = self.iter_steps) 
         
         if self.null_gamma == True:
             K, L = self.cal_kernels(Xte, Yte, wx, wy)
