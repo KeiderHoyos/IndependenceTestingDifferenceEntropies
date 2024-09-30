@@ -109,8 +109,8 @@ def run():
             results_dime = dime_estimator.perform_test()
             test_power[3, i, j] = float(results_dime['h0_rejected'])
 
-            # alpha = 0.5, Rényi Entropies    
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor,  alpha = 0.5, type_bandwidth= 'isotropic',
+            # alpha = 0.25, Rényi Entropies    
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor,  alpha = 0.25, type_bandwidth= 'isotropic',
                                             dime_perm = args.dime_perm , lr = args.lr,
                                             epochs = args.epochs, batch_size = args.batch_size,
                                             grid_search_min = args.grid_search_min,
@@ -118,7 +118,7 @@ def run():
             results_dime = dime_estimator.perform_test()
             test_power[4, i, j] = float(results_dime['h0_rejected'])
         
-            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 0.5, type_bandwidth= "weighted",
+            dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 0.25, type_bandwidth= "weighted",
                                             dime_perm = args.dime_perm , lr = args.lr,
                                             epochs = args.epochs, batch_size = args.batch_size,
                                             grid_search_min = args.grid_search_min,
