@@ -32,50 +32,45 @@ parser.add_argument('-datafolder', '--DATAFOLDER', required = True, type = str )
 parser.add_argument('-parallel', '--parallel', required = False, default = False, type = bool)
 parser.add_argument('-dime_perm', '--dime_perm', required = False, default = 10, type = int)
 parser.add_argument('-epochs', '--epochs', required = False, default = 300, type = int)
-parser.add_argument('-lr', '--lr', required = False, default = 0.05, type = float)
+parser.add_argument('-lr', '--lr', required = False, default = 0.005, type = float)
 parser.add_argument('-batch_size', '--batch_size', required = False, default = None, type = int)
 parser.add_argument('-grid_search_min', '--grid_search_min', required = False, default = -3, type = int)
-parser.add_argument('-grid_search_max', '--grid_search_max', required = False, default = 3, type = int)
+parser.add_argument('-grid_search_max', '--grid_search_max', required = False, default = 1, type = int)
 
 args = parser.parse_args()
 
 
-def sinedependence(n,d,seed = 0):
+def generate_ISA(n,d,sigma_normal,alpha, seed = 0):
     np.random.seed(seed)
-    mean = np.zeros(d)
-    cov = np.eye(d)
-    X = np.random.multivariate_normal(mean, cov, n)
-    Z = np.random.randn(n)
-    Y = 20*np.sin(4*np.pi*(X[:,0]**2 + X[:,1]**2))+Z 
-    return X,Y
-def Sinusoid(x, y, w):
-    return 1 + np.sin(w*x)*np.sin(w*y)
+    x = np.concatenate((np.random.normal(-1, sigma_normal, n//2), np.random.normal(1, sigma_normal, n//2)))
+    y = np.concatenate((np.random.normal(-1, sigma_normal, n//2), np.random.normal(1, sigma_normal, n//2)))
+    p = np.random.permutation(n)
+    y_p = y[p]
 
-def Sinusoid_Generator(n,w, seed = 0):
-    np.random.seed(seed)
-    i = 0
-    output = np.zeros([n,2])
-    while i < n:
-        U = np.random.rand(1)
-        V = np.random.rand(2)
-        x0 = -np.pi + V[0]*2*np.pi
-        x1 = -np.pi + V[1]*2*np.pi
-        if U < 1/2 * Sinusoid(x0,x1,w):
-            output[i, 0] = x0
-            output[i, 1] = x1
-            i = i + 1
-    X = output[:,0:1]
-    Y = output[:,1:]
-    return X,Y
+    D = np.zeros([2,n])
+    D[0,:] = x
+    D[1,:] = y_p
 
-def GSign(n,d, seed):
-    np.random.seed(seed)
-    mean = np.zeros(d)
-    cov = np.eye(d)
-    X = np.random.multivariate_normal(mean, cov, n)
-    sign_X = np.sign(X)
-    Z = np.random.randn(n)
-    Y = np.abs(Z)*np.prod(sign_X,1)
+    theta = np.pi/4*alpha
+    c, s = np.cos(theta), np.sin(theta)
+    R = np.array(((c, -s), (s, c)))
+
+    D_R = R@D
+    X_mix = D_R[0,:].reshape(-1,1)
+    Y_mix = D_R[1,:].reshape(-1,1)
+
+    X_z = np.random.randn(n,d-1)
+    Y_z = np.random.randn(n,d-1)
+
+    X_con = np.concatenate((X_mix,X_z), axis=1)
+    Y_con = np.concatenate((Y_mix,Y_z), axis=1)
+
+    m_x = ortho_group.rvs(dim=d)
+    m_y = ortho_group.rvs(dim=d)
+
+    X = (m_x@X_con.T).T
+    Y = (m_y@Y_con.T).T
+    
     return X,Y
 
 def run():
@@ -87,43 +82,22 @@ def run():
     else:
         test_num = repetitions
         seed = 0 
-    # device = torch.device('cuda')
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    d = 3
-
-    datasets = ['sinusoid', 'sine', 'gsign']
-    n_datasets = len(datasets)
+    device = torch.device('cuda')
+    sigma_normal = 0.1 # 0.01 Check github code for the correct value (0.1 here: https://github.com/renyixin666/HSIC-LK/commit/a718bc42228ee82cbb3e7719ee7c9d6b8a1f62a2), according to paper 0.01
+    n = 128
+    # generate powers of two for the dimensions
+    dimensions = [2**i for i in range(1, 8)] 
+    alpha = 0.5
+    n_dimensions = len(dimensions)
     n_tests = 9
-    test_power = np.zeros([n_tests,n_datasets, test_num])
-    n = 500
+    test_power = np.zeros([n_tests,n_dimensions, test_num])
+    
 
-    for i, dataset in enumerate(datasets):
+    for i, d in enumerate(dimensions):
         for j in range(test_num):
-            print('sample size:', n, 'repetition: ', j)
-            if dataset == 'sinusoid':
-                print('sinusoid')
-                w = 3
-                X, Y = Sinusoid_Generator(n, w, seed)
-                Y = Y.reshape(-1,1)
-            elif dataset == 'sine':
-                print('sine')
-                d = 3
-                X, Y = sinedependence(n, d, seed)
-                Y = Y.reshape(-1,1)
-            elif dataset == 'gsign':
-                print('gsign')
-                d = 4
-                X, Y =  GSign(n,d, seed)
-                Y = Y.reshape(-1,1)
-
+            print('alpha:', alpha, 'repetition: ', j)
+            X, Y =generate_ISA(n,d,sigma_normal,alpha, seed)
             X_tensor, Y_tensor = torch.tensor(X, device=device), torch.tensor(Y,device=device)
-
-            
-            # set torch seed
-            torch.manual_seed(seed)
-            torch.cuda.manual_seed(seed)
-            # permute Y samples for Type I error
-            Y_tensor = torch.randperm(Y_tensor.size(0), device=device).to(X_tensor.dtype).view(-1, 1)
 
             # alpha = 1.0, von Neumann Entropies
             dime_estimator = IndpTest_DIME( X_tensor, Y_tensor, alpha = 1.0, type_bandwidth= 'isotropic',
