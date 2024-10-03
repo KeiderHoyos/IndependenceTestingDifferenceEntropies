@@ -87,7 +87,7 @@ def run():
     n = 128
     # generate powers of two for the dimensions
     dimensions = [2**i for i in range(1, 8)] 
-    alpha = 0.5
+    alpha = 0.5 # angle of rotation, different from the alpha in the DIME test
     n_dimensions = len(dimensions)
     n_tests = 9
     test_power = np.zeros([n_tests,n_dimensions, test_num])
